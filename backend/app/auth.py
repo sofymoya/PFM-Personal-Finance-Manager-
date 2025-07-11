@@ -58,7 +58,7 @@ def extract_transactions_with_ai(pdf_text: str) -> list:
     client = OpenAI(api_key=api_key)
 
     # Dividir el texto en chunks más pequeños para evitar el límite de contexto
-    def split_text_into_chunks(text: str, max_chunk_size: int = 8000) -> list:
+    def split_text_into_chunks(text: str, max_chunk_size: int = 12000) -> list:
         """Divide el texto en chunks más pequeños, respetando líneas completas"""
         lines = text.split('\n')
         chunks = []
@@ -92,14 +92,16 @@ def extract_transactions_with_ai(pdf_text: str) -> list:
         print(f"🤖 Procesando chunk {i+1}/{len(text_chunks)}...")
         
         prompt = (
-            "Eres un experto en análisis de estados de cuenta bancarios MEXICANOS. Extrae SOLO transacciones REALES del texto proporcionado.\n\n"
-            "INSTRUCCIONES:\n"
-            "1. SOLO extrae transacciones con montos REALES (mínimo $5.00)\n"
+            "Eres un experto en análisis de estados de cuenta bancarios MEXICANOS. Extrae TODAS las transacciones REALES del texto proporcionado.\n\n"
+            "INSTRUCCIONES CRÍTICAS:\n"
+            "1. Extrae TODAS las transacciones con montos REALES (mínimo $1.00)\n"
             "2. NO extraigas encabezados, resúmenes, o texto promocional\n"
             "3. Busca transacciones con fechas, descripciones y montos claros\n"
             "4. Los cargos deben ser NEGATIVOS, los abonos POSITIVOS\n"
-            "5. Busca patrones de bancos mexicanos: 'SU PAGO', 'COMPRA', 'RETIRO', 'DEPOSITO', etc.\n"
-            "6. Para HSBC busca códigos como 'ME 010517AEA', fechas 'DD-MMM-YYYY', montos '$XXX.XX'\n\n"
+            "5. Busca TODOS los patrones: 'SU PAGO', 'COMPRA', 'RETIRO', 'DEPOSITO', 'CARGO', 'ABONO', 'COMISION', etc.\n"
+            "6. Para HSBC busca TODOS los códigos: 'ME 010517AEA', 'ANA', 'CPA', 'SIH', 'MOOH', fechas 'DD-MMM-YYYY', montos '$XXX.XX'\n"
+            "7. Incluye transacciones pequeñas como comisiones, cargos por servicios, etc.\n"
+            "8. Busca transacciones en diferentes formatos de fecha: DD/MM/YYYY, DD-MMM-YYYY, DD-MM-YYYY\n\n"
             "FORMATO: Lista JSON con transacciones:\n"
             "[\n"
             "  {\n"
@@ -111,14 +113,14 @@ def extract_transactions_with_ai(pdf_text: str) -> list:
             "]\n\n"
             "TEXTO:\n"
             f"{chunk}\n\n"
-            "Extrae SOLO transacciones REALES:"
+            "Extrae TODAS las transacciones REALES que encuentres:"
         )
         
         try:
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=1500,
+                max_tokens=3000,
                 temperature=0
             )
             
@@ -131,15 +133,15 @@ def extract_transactions_with_ai(pdf_text: str) -> list:
                     monto = transaction.get('monto', 0)
                     descripcion = transaction.get('descripcion', '').lower()
                     
-                    # Validaciones para evitar falsos positivos
-                    if (abs(monto) >= 5.0 and  # Monto mínimo $5
+                    # Validaciones para evitar falsos positivos (menos restrictivas)
+                    if (abs(monto) >= 1.0 and  # Monto mínimo $1 (reducido)
                         monto != 0 and  # No montos de $0
                         'interes' not in descripcion and  # No tasas de interés
                         'saldo' not in descripcion and  # No saldos
                         'tasa' not in descripcion and  # No tasas
                         'pago minimo' not in descripcion and  # No pagos mínimos
                         '0%' not in descripcion and  # No porcentajes 0%
-                        len(descripcion.strip()) > 3):  # Descripción válida
+                        len(descripcion.strip()) > 2):  # Descripción válida (reducida)
                         
                         all_transactions.append(transaction)
                         print(f"✅ Transacción válida: {transaction.get('fecha_operacion', '')} - {transaction.get('descripcion', '')[:40]} - ${monto}")
@@ -151,5 +153,21 @@ def extract_transactions_with_ai(pdf_text: str) -> list:
             print(f"❌ Error procesando chunk {i+1}: {e}")
             continue
     
-    print(f"📊 Total de transacciones válidas encontradas: {len(all_transactions)}")
-    return all_transactions
+    # Eliminar duplicados basados en fecha, descripción y monto
+    unique_transactions = []
+    seen = set()
+    
+    for transaction in all_transactions:
+        # Crear una clave única para cada transacción
+        key = (
+            transaction.get('fecha_operacion', ''),
+            transaction.get('descripcion', '').lower()[:50],  # Primeros 50 caracteres
+            transaction.get('monto', 0)
+        )
+        
+        if key not in seen:
+            seen.add(key)
+            unique_transactions.append(transaction)
+    
+    print(f"📊 Total de transacciones únicas encontradas: {len(unique_transactions)}")
+    return unique_transactions
