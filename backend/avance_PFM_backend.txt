@@ -1,0 +1,151 @@
+AVANCE DEL PROYECTO PFM - BACKEND
+=====================================
+
+ÚLTIMA ACTUALIZACIÓN: 11 de Julio 2025
+
+ESTADO ACTUAL:
+✅ Backend funcionando con FastAPI
+✅ Base de datos SQLite configurada
+✅ Autenticación JWT implementada
+✅ Endpoints de transacciones completos
+✅ Endpoint de carga de PDFs funcionando
+✅ OCR con Tesseract implementado como fallback
+✅ Categorización con OpenAI funcionando
+✅ Frontend React funcionando
+✅ Pruebas unitarias implementadas
+
+MEJORAS RECIENTES IMPLEMENTADAS:
+
+1. ✅ OCR CON TESSERACT
+   - Instalado tesseract-lang para soporte de idioma español
+   - Función extract_text_with_ocr_fallback() implementada
+   - Detección automática de códigos (cid:XXX) en PDFs
+   - Fallback automático a OCR cuando el texto no es legible
+   - Soporte para múltiples páginas
+
+2. ✅ DETECCIÓN DE BANCOS MEJORADA
+   - BBVA: Funcionando correctamente
+   - HSBC: Agregado soporte
+   - Santander: Preparado
+   - Banorte: Preparado
+   - Desconocido: Fallback
+
+3. ✅ PROCESAMIENTO DE PDFs ROBUSTO
+   - Extracción de texto con pdfplumber
+   - OCR automático cuando es necesario
+   - Múltiples patrones de regex para diferentes formatos
+   - Manejo de errores mejorado
+
+4. ✅ CATEGORIZACIÓN CON OPENAI
+   - Integración con GPT-3.5-turbo
+   - Categorización automática de transacciones
+   - Fallback a categorización basada en palabras clave
+   - Manejo de errores de API
+
+5. ✅ ENDPOINTS COMPLETOS
+   - /upload_pdf: Carga con autenticación
+   - /test_upload_pdf: Carga sin autenticación (testing)
+   - /transactions/: CRUD completo
+   - /transactions/filter: Filtros avanzados
+   - /transactions/summary/*: Visualizaciones
+
+6. ✅ PRUEBAS Y DEPURACIÓN
+   - Scripts de prueba para PDFs
+   - Análisis de formato de diferentes bancos
+   - Debug de OCR y extracción de texto
+   - Pruebas unitarias implementadas
+
+PROBLEMAS RESUELTOS:
+
+1. ❌ PDFs con códigos (cid:XXX) ilegibles
+   ✅ SOLUCIONADO: OCR automático con Tesseract
+
+2. ❌ Detección de banco HSBC
+   ✅ SOLUCIONADO: Agregado soporte para HSBC
+
+3. ❌ Falta de paquete de idioma español para Tesseract
+   ✅ SOLUCIONADO: Instalado tesseract-lang
+
+4. ❌ Manejo de errores en categorización
+   ✅ SOLUCIONADO: Fallback a categorización basada en palabras clave
+
+ESTADO DE PRUEBAS:
+
+✅ PDF de prueba (BBVA): Funcionando perfectamente
+   - 5 transacciones extraídas
+   - Categorización correcta
+   - Banco detectado: BBVA
+
+⚠️  PDF real (HSBC): OCR funcionando, pero formato diferente
+   - OCR extrae texto legible
+   - Banco detectado: HSBC
+   - Formato es de tarjeta de crédito, no cuenta bancaria
+   - Necesita patrones específicos para HSBC
+
+PRÓXIMOS PASOS:
+
+1. 🔄 Implementar patrones específicos para HSBC
+2. 🔄 Agregar soporte para más bancos
+3. 🔄 Mejorar precisión del OCR
+4. 🔄 Implementar validación de PDFs
+5. 🔄 Agregar más categorías de transacciones
+6. 🔄 Implementar cache de categorización
+7. 🔄 Agregar logs detallados
+8. 🔄 Implementar rate limiting
+9. 🔄 Agregar autenticación de dos factores
+10. 🔄 Implementar backup automático de base de datos
+
+TECNOLOGÍAS UTILIZADAS:
+
+Backend:
+- FastAPI (Python)
+- SQLAlchemy (ORM)
+- SQLite (Base de datos)
+- JWT (Autenticación)
+- pdfplumber (Extracción de PDFs)
+- pytesseract (OCR)
+- OpenAI API (Categorización)
+- Pydantic (Validación)
+
+Frontend:
+- React (TypeScript)
+- Tailwind CSS
+- Vite
+- React Router
+- Axios
+
+Herramientas:
+- Tesseract OCR
+- Homebrew (Gestión de paquetes)
+- Git (Control de versiones)
+
+ARCHIVOS IMPORTANTES:
+
+Backend:
+- app/main.py: Endpoints principales
+- app/models.py: Modelos de base de datos
+- app/schemas.py: Esquemas Pydantic
+- app/crud.py: Operaciones de base de datos
+- app/auth.py: Autenticación JWT
+- test_*.py: Scripts de prueba
+
+Frontend:
+- src/pages/UploadPDF.tsx: Componente de carga
+- src/services/api.ts: Cliente API
+- src/auth/*.tsx: Componentes de autenticación
+
+NOTAS IMPORTANTES:
+
+1. El sistema OCR funciona correctamente para PDFs con texto ilegible
+2. La categorización con OpenAI requiere API key válida
+3. El formato de PDFs varía significativamente entre bancos
+4. Se recomienda probar con diferentes tipos de PDFs
+5. El sistema es escalable para agregar más bancos
+6. La base de datos SQLite es adecuada para desarrollo
+7. Para producción, considerar PostgreSQL o MySQL
+
+CONTACTO Y SOPORTE:
+- Usuario: Ana Sofía Moya Torres
+- Proyecto: PFM (Personal Finance Manager)
+- Fecha de inicio: Julio 2025
+- Estado: En desarrollo activo 

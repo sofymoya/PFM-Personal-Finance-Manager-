@@ -1,0 +1,37 @@
+AVANCE BACKEND PFM (hasta la fecha)
+
+1. Endpoint para subir PDF bancario:
+   - POST /upload_pdf
+   - Recibe un archivo PDF, lo guarda temporalmente y procesa su contenido.
+   - Extrae transacciones del PDF (formato BBVA, columna 'Fecha de la operación').
+   - Cada transacción extraída incluye: fecha_operacion, descripcion, monto, tipo (abono/cargo), categoria (usando OpenAI).
+   - Las transacciones se guardan en la base de datos asociadas al usuario autenticado.
+
+2. Integración con OpenAI:
+   - Se usa la API key almacenada en .env (OPENAI_API_KEY).
+   - Cada transacción es categorizada automáticamente usando un prompt a GPT-3.5-turbo.
+
+3. Endpoint para filtrar transacciones:
+   - GET /transactions/filter
+   - Permite filtrar por rango de fechas (DD-MM-YYYY), monto mínimo, monto máximo y categoría.
+   - Devuelve las transacciones del usuario autenticado que cumplen los filtros.
+
+4. Estructura de la base de datos:
+   - Tabla Transaction: id, description, amount, date, category, user_id, created_at
+   - Tabla User: id, email, hashed_password, name, created_at
+
+5. Lógica de extracción:
+   - Se usa pdfplumber para extraer texto del PDF.
+   - Se usa regex para identificar líneas de transacciones.
+   - Se parsean los campos y se convierten a los tipos requeridos.
+
+6. Pendiente:
+   - Endpoints para visualizaciones (totales mensuales, proporción por categoría, tabla resumen)
+   - Interfaz frontend para carga de PDF y visualización de datos
+
+7. Endpoints para visualizaciones y resumen:
+   - GET /transactions/summary/monthly: Totales mensuales de ingresos y gastos.
+   - GET /transactions/summary/category: Proporción de gasto por categoría (para gráfico de pastel).
+   - GET /transactions/summary/table: Tabla resumen de total gastado por categoría y por mes.
+
+Fecha de avance: [REEMPLAZAR_POR_FECHA] 

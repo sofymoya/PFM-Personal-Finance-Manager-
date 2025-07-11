@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import UploadPDF from './pages/UploadPDF';
 
 function LandingPage() {
   return (
@@ -88,11 +89,19 @@ function LandingPage() {
 function App() {
   return (
     <Router>
+      <nav className="p-4 bg-gray-100 flex gap-4">
+        <Link to="/" className="text-blue-600 hover:underline">Inicio</Link>
+        <Link to="/register" className="text-blue-600 hover:underline">Registro</Link>
+        <Link to="/login" className="text-blue-600 hover:underline">Login</Link>
+        <Link to="/dashboard" className="text-blue-600 hover:underline">Dashboard</Link>
+        <Link to="/upload" className="text-blue-600 hover:underline">Subir PDF</Link>
+      </nav>
       <div className="App">
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/upload" element={<UploadPDF />} />
           <Route path="/" element={<LandingPage />} />
         </Routes>
       </div>
