@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../services/api';
 
 const UploadPDF: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // Obtener el token del usuario autenticado (ajusta según tu auth)
-  const token = localStorage.getItem('token');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -28,16 +25,11 @@ const UploadPDF: React.FC = () => {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const response = await axios.post(
-        'http://localhost:8000/upload_pdf',
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data',
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await api.post('/upload_pdf', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       setResult(response.data);
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Error al subir el PDF.');
