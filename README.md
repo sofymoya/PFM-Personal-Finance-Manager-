@@ -1,158 +1,168 @@
 # PFM - Personal Finance Manager
 
-Una aplicación web completa para gestionar finanzas personales, construida con FastAPI (backend) y React TypeScript (frontend).
+Sistema de gestión financiera personal que permite extraer y analizar transacciones bancarias desde estados de cuenta en PDF.
 
-## 🚀 Características
+## 🚀 Inicio Rápido
 
-- **Autenticación de usuarios**: Registro e inicio de sesión seguro
-- **Gestión de transacciones**: Agregar, editar y eliminar transacciones
-- **Dashboard intuitivo**: Vista general de finanzas personales
-- **API RESTful**: Backend robusto con FastAPI
-- **Interfaz moderna**: Frontend responsive con React y TypeScript
+### Opción 1: Script Automatizado (Recomendado)
+```bash
+# Desde la raíz del proyecto
+./run_all.sh
+```
 
-## 🛠️ Tecnologías Utilizadas
+Este comando levanta automáticamente:
+- **Backend**: Puerto 8000 (con entorno virtual detectado automáticamente)
+- **Frontend**: Puerto 5173 (o el siguiente disponible)
 
-### Backend
-- **FastAPI**: Framework web moderno y rápido para Python
-- **SQLAlchemy**: ORM para manejo de base de datos
-- **Pydantic**: Validación de datos y serialización
-- **Alembic**: Migraciones de base de datos
-- **Passlib**: Hashing de contraseñas
-- **JWT**: Autenticación con tokens
+### Opción 2: Manual
+```bash
+# Terminal 1: Backend
+cd backend
+source venv/bin/activate  # o source .venv/bin/activate
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-### Frontend
-- **React 18**: Biblioteca de interfaz de usuario
-- **TypeScript**: Tipado estático para JavaScript
-- **Vite**: Herramienta de construcción rápida
-- **React Router**: Navegación entre páginas
-- **Axios**: Cliente HTTP para llamadas a la API
-- **Tailwind CSS**: Framework de CSS utilitario
+# Terminal 2: Frontend
+cd frontend
+npm install
+npm run dev
+```
 
-## 📋 Requisitos Previos
+## 📋 Características
 
+- **Extracción automática** de transacciones desde PDFs bancarios
+- **Soporte multi-banco**: Santander, HSBC, BBVA, Banorte
+- **OCR inteligente** para PDFs escaneados
+- **Categorización automática** de transacciones
+- **Interfaz web moderna** con React + TypeScript
+- **API REST** con FastAPI
+- **Base de datos SQLite** con SQLAlchemy
+
+## 🏗️ Estructura del Proyecto
+
+```
+PFM Cursor/
+├── backend/                 # API FastAPI
+│   ├── app/
+│   │   ├── main.py         # Endpoints principales
+│   │   ├── models.py       # Modelos de base de datos
+│   │   ├── auth.py         # Autenticación
+│   │   └── ...
+│   ├── requirements.txt    # Dependencias Python
+│   ├── test_*.py          # Scripts de prueba
+│   └── README_TESTS.md    # Documentación de pruebas
+├── frontend/               # Aplicación React
+│   ├── src/
+│   │   ├── pages/         # Componentes de página
+│   │   ├── services/      # Servicios API
+│   │   └── ...
+│   └── package.json       # Dependencias Node.js
+├── run_all.sh             # Script de automatización
+└── README.md              # Este archivo
+```
+
+## 🛠️ Instalación
+
+### Prerrequisitos
 - Python 3.8+
 - Node.js 16+
 - npm o yarn
 
-## 🚀 Instalación y Configuración
-
-### 1. Clonar el repositorio
+### Backend
 ```bash
-git clone <tu-repositorio-url>
-cd PFM-Cursor
+cd backend
+python3 -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-### 2. Configurar el Backend
-
+### Frontend
 ```bash
-# Navegar al directorio del backend
+cd frontend
+npm install
+```
+
+## 🧪 Pruebas
+
+### Scripts de Prueba Disponibles
+```bash
 cd backend
 
-# Crear entorno virtual
-python3 -m venv venv
+# Limpiar base de datos de pruebas
+python limpiar_db.py
 
-# Activar entorno virtual
-# En macOS/Linux:
-source venv/bin/activate
-# En Windows:
-# venv\Scripts\activate
+# Probar extracción de múltiples bancos
+python test_multi_bank.py
 
-# Instalar dependencias
-pip install fastapi uvicorn sqlalchemy passlib[bcrypt] pydantic email-validator python-multipart alembic
-
-# Ejecutar migraciones
-alembic upgrade head
-
-# Iniciar el servidor
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+# Probar configuración completa
+python setup_test_environment.py
 ```
 
-### 3. Configurar el Frontend
+Ver `backend/README_TESTS.md` para documentación detallada.
 
-```bash
-# Navegar al directorio del frontend
-cd frontend
-
-# Instalar dependencias
-npm install
-
-# Iniciar el servidor de desarrollo
-npm run dev
-```
-
-## 🌐 Acceso a la Aplicación
-
-- **Frontend**: http://localhost:5173
-- **Backend API**: http://localhost:8000
-- **Documentación API**: http://localhost:8000/docs
-
-## 📁 Estructura del Proyecto
-
-```
-PFM-Cursor/
-├── backend/
-│   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py          # Punto de entrada de FastAPI
-│   │   ├── models.py        # Modelos de SQLAlchemy
-│   │   ├── schemas.py       # Esquemas de Pydantic
-│   │   ├── crud.py          # Operaciones CRUD
-│   │   ├── auth.py          # Autenticación y JWT
-│   │   ├── deps.py          # Dependencias
-│   │   ├── database.py      # Configuración de base de datos
-│   │   └── routers.py       # Rutas de la API
-│   ├── alembic/             # Migraciones de base de datos
-│   └── requirements.txt     # Dependencias de Python
-├── frontend/
-│   ├── src/
-│   │   ├── pages/           # Componentes de páginas
-│   │   ├── services/        # Servicios de API
-│   │   ├── utils/           # Utilidades
-│   │   ├── App.tsx          # Componente principal
-│   │   └── main.tsx         # Punto de entrada
-│   ├── package.json         # Dependencias de Node.js
-│   └── vite.config.ts       # Configuración de Vite
-└── README.md
-```
-
-## 🔧 Configuración de Desarrollo
+## 🔧 Configuración
 
 ### Variables de Entorno
-
-Crea un archivo `.env` en el directorio `backend/`:
-
+Crear archivo `.env` en `backend/`:
 ```env
-SECRET_KEY=tu-clave-secreta-aqui
-DATABASE_URL=sqlite:///./database.db
+OPENAI_API_KEY=tu_api_key_aqui
+SECRET_KEY=tu_secret_key_aqui
 ```
 
 ### Base de Datos
+La base de datos SQLite se crea automáticamente en `backend/app.db`
 
-La aplicación usa SQLite por defecto. Para usar PostgreSQL o MySQL, modifica la URL de la base de datos en `backend/app/database.py`.
+## 📖 Uso
 
-## 📝 Uso
+1. **Iniciar el sistema**: `./run_all.sh`
+2. **Abrir navegador**: `http://localhost:5173`
+3. **Registrarse/Iniciar sesión**
+4. **Subir PDF** de estado de cuenta
+5. **Revisar transacciones** extraídas
 
-1. **Registro**: Crea una nueva cuenta en la página de registro
-2. **Login**: Inicia sesión con tus credenciales
-3. **Dashboard**: Visualiza tu resumen financiero
-4. **Transacciones**: Agrega y gestiona tus transacciones
+## 🏦 Bancos Soportados
 
-## 🤝 Contribución
+- **Santander**: Extracción completa con OCR
+- **HSBC**: Parser específico + AI fallback
+- **BBVA**: Parser estándar
+- **Banorte**: Parser estándar
+- **Otros**: AI fallback universal
+
+## 🔍 Troubleshooting
+
+### Error: "Address already in use"
+```bash
+pkill -f "uvicorn"
+./run_all.sh
+```
+
+### Error: "No module named uvicorn"
+```bash
+cd backend
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Error: "npm run dev not found"
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## 📝 Logs
+
+Los logs se muestran con prefijos:
+- `[BACKEND]` - Servidor FastAPI
+- `[FRONTEND]` - Servidor Vite
+
+## 🤝 Contribuir
 
 1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+2. Crear rama feature (`git checkout -b feature/AmazingFeature`)
+3. Commit cambios (`git commit -m 'Add AmazingFeature'`)
 4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+5. Abrir Pull Request
 
 ## 📄 Licencia
 
-Este proyecto está bajo la Licencia MIT. Ver el archivo `LICENSE` para más detalles.
-
-## 🆘 Soporte
-
-Si tienes problemas o preguntas, por favor abre un issue en el repositorio.
-
----
-
-**¡Disfruta gestionando tus finanzas personales! 💰** 
+Este proyecto está bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para detalles. 
