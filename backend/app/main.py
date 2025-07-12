@@ -242,7 +242,7 @@ def extract_text_with_ocr_fallback(pdf_path: str):
             print(f"📄 PDF abierto correctamente. Páginas: {len(pdf.pages)}")
             
             # Intentar extracción normal primero
-            extracted_text = ""
+    extracted_text = ""
             for i, page in enumerate(pdf.pages):
                 page_text = page.extract_text()
                 if page_text:
@@ -623,16 +623,16 @@ def categorize_transaction_openai(descripcion: str, api_key: str):
     try:
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
-        prompt = f"""
-        Categoriza la siguiente transacción bancaria en una sola palabra (por ejemplo: supermercado, transporte, restaurante, ingreso, etc.):\n\n"{descripcion}"\n\nCategoría: """
+    prompt = f"""
+    Categoriza la siguiente transacción bancaria en una sola palabra (por ejemplo: supermercado, transporte, restaurante, ingreso, etc.):\n\n"{descripcion}"\n\nCategoría: """
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=3,
-            temperature=0
-        )
-        categoria = response.choices[0].message.content.strip()
-        return categoria
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=3,
+        temperature=0
+    )
+    categoria = response.choices[0].message.content.strip()
+    return categoria
     except Exception as e:
         print(f"Error en categorización OpenAI: {e}")
         # Categorización básica basada en palabras clave
@@ -761,7 +761,7 @@ def _parse_date(date_str: str):
     # Convierte '04-Jun-2025' o '04-ABR-2025' a objeto date
     try:
         # Primero intentar con el formato original
-        return datetime.strptime(date_str, "%d-%b-%Y").date()
+    return datetime.strptime(date_str, "%d-%b-%Y").date()
     except ValueError:
         # Si falla, intentar con formato en mayúsculas (como ABR, ENE, FEB, etc.)
         # Mapear abreviaciones en mayúsculas a formato estándar
@@ -1082,123 +1082,63 @@ def extract_hsbc_transactions(extracted_text: str) -> List[dict]:
     print(f"📊 Total de transacciones HSBC encontradas: {len(transactions)}")
     return transactions
 
-def extract_santander_transactions(extracted_text: str) -> List[dict]:
+def extract_santander_transactions(extracted_text: str) -> list:
     """
     Extrae transacciones de Santander del texto OCR.
-    Basado en el formato: FECHA FOLIO | DESCRIPCION DEPOSITO RETIRO SALDO
+    Limpia descripciones, normaliza montos y fechas, y filtra duplicados y líneas basura.
     """
     import re
+    from datetime import datetime
     transactions = []
-    
-    # Validar que el texto no sea None o vacío
+    seen = set()
     if not extracted_text or not isinstance(extracted_text, str):
         print("❌ Texto extraído es None o no es string")
         return transactions
-    
     lines = extracted_text.split('\n')
-    
-    print("🔍 Buscando transacciones en texto Santander...")
-    
-    # Buscar líneas que contengan el patrón de Santander
-    # Formato típico: FECHA FOLIO | DESCRIPCION DEPOSITO RETIRO SALDO
-    for i, line in enumerate(lines):
+    print("🔍 Buscando transacciones en texto Santander (limpieza avanzada)...")
+    # Patrón: fecha, folio, descripción, monto
+    pattern = re.compile(r"(\d{2}-[A-Z]{3}-\d{4})[^\d]*(.+?)([\d,]+\.\d{2})")
+    for line in lines:
         line = line.strip()
-        if not line:
+        if not line or len(line) < 20:
             continue
-        
-        # Patrón para Santander: DD-MMM-YYYY FOLIO DESCRIPCION DEPOSITO RETIRO SALDO
-        # Ejemplo: 01-ABR-2025 1445844 PAGO TRANSFERENCIA SPEI HORA 10:18:45 90.00 7.00
-        pattern = r'(\d{2}-[A-Z]{3}-\d{4})\s+(\d+)\s+(.+?)\s+(\d+\.\d{2})\s+(\d+\.\d{2})'
-        match = re.search(pattern, line)
-        
+        match = pattern.search(line)
         if match:
+            fecha_raw, desc_raw, monto_raw = match.groups()
+            # Limpiar fecha
             try:
-                fecha_operacion = match.group(1)
-                folio = match.group(2)
-                descripcion = match.group(3).strip()
-                deposito_str = match.group(4)
-                retiro_str = match.group(5)
-                
-                # Determinar si es depósito o retiro
-                deposito = float(deposito_str) if deposito_str != "0.00" else 0
-                retiro = float(retiro_str) if retiro_str != "0.00" else 0
-                
-                if deposito > 0:
-                    monto = deposito
-                    tipo = "abono"
-                elif retiro > 0:
-                    monto = -retiro
-                    tipo = "cargo"
-                else:
-                    continue  # Saltar líneas sin movimientos
-                
-                # Validar que la descripción no esté vacía
-                if descripcion and len(descripcion.strip()) > 2:
-                    transactions.append({
-                        "fecha_operacion": fecha_operacion,
-                        "fecha_cargo": fecha_operacion,
-                        "descripcion": descripcion,
-                        "monto": monto,
-                        "tipo": tipo,
-                        "categoria": "Sin categorizar"
-                    })
-                    print(f"✅ Transacción Santander encontrada: {fecha_operacion} - {descripcion[:40]} - ${monto}")
-                    
-            except Exception as e:
-                print(f"❌ Error procesando línea Santander: {line} - {e}")
+                fecha = fecha_raw.upper()
+                # Normalizar mes español a inglés si aplica
+                meses = {'ENE':'Jan','FEB':'Feb','MAR':'Mar','ABR':'Apr','MAY':'May','JUN':'Jun','JUL':'Jul','AGO':'Aug','SEP':'Sep','OCT':'Oct','NOV':'Nov','DIC':'Dec'}
+                for esp, eng in meses.items():
+                    if esp in fecha:
+                        fecha = fecha.replace(esp, eng)
+                fecha_dt = datetime.strptime(fecha, "%d-%b-%Y").date()
+            except Exception:
                 continue
-    
-    # Si no se encontraron transacciones con el patrón principal, buscar patrones alternativos
-    if not transactions:
-        print("🔍 Buscando patrones alternativos de Santander...")
-        
-        for i, line in enumerate(lines):
-            line = line.strip()
-            if not line:
+            # Limpiar descripción
+            desc = re.sub(r"[\[\]\|]+", " ", desc_raw)
+            desc = re.sub(r"\s+", " ", desc).strip()
+            # Limpiar monto
+            monto = float(monto_raw.replace(",", ""))
+            # Heurística: si la palabra 'abono' o 'deposito' está en la descripción, es abono
+            tipo = 'abono' if re.search(r"abono|deposito|ingreso", desc, re.I) else 'cargo'
+            # Firmar monto según tipo
+            monto = abs(monto) if tipo == 'abono' else -abs(monto)
+            # Evitar duplicados
+            key = (fecha_dt, desc, monto)
+            if key in seen:
                 continue
-            
-            # Patrón alternativo: buscar fechas y montos por separado
-            fecha_match = re.search(r'(\d{2}-[A-Z]{3}-\d{4})', line)
-            if fecha_match:
-                fecha = fecha_match.group(1)
-                
-                # Buscar montos en la línea
-                montos = re.findall(r'(\d+\.\d{2})', line)
-                if len(montos) >= 2:  # Debe tener al menos depósito y retiro
-                    try:
-                        deposito = float(montos[0])
-                        retiro = float(montos[1])
-                        
-                        # Determinar tipo de transacción
-                        if deposito > 0 and retiro == 0:
-                            monto = deposito
-                            tipo = "abono"
-                        elif retiro > 0 and deposito == 0:
-                            monto = -retiro
-                            tipo = "cargo"
-                        else:
-                            continue
-                        
-                        # Extraer descripción (todo lo que no sea fecha ni montos)
-                        descripcion = line.replace(fecha, '').replace(montos[0], '').replace(montos[1], '').strip()
-                        descripcion = re.sub(r'\d+', '', descripcion).strip()  # Remover números restantes
-                        
-                        if descripcion and len(descripcion) > 2:
-                            transactions.append({
-                                "fecha_operacion": fecha,
-                                "fecha_cargo": fecha,
-                                "descripcion": descripcion,
-                                "monto": monto,
-                                "tipo": tipo,
-                                "categoria": "Sin categorizar"
-                            })
-                            print(f"✅ Transacción Santander (patrón alternativo): {fecha} - {descripcion[:40]} - ${monto}")
-                            
-                    except Exception as e:
-                        print(f"❌ Error procesando montos: {line} - {e}")
-                        continue
-    
-    print(f"📊 Total de transacciones Santander encontradas: {len(transactions)}")
+            seen.add(key)
+            transactions.append({
+                'fecha_operacion': fecha_raw,  # Mantener formato original "01-ABR-2025"
+                'fecha_cargo': fecha_raw,      # Mantener formato original "01-ABR-2025"
+                'descripcion': desc,
+                'monto': monto,
+                'tipo': tipo,
+                'categoria': 'Sin categorizar'
+            })
+    print(f"📊 Total de transacciones Santander limpias encontradas: {len(transactions)}")
     return transactions
 
 def _process_chunk_with_ai(chunk: str, api_key: str) -> List[Dict[str, Any]]:
