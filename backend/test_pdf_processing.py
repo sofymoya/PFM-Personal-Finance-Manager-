@@ -2,16 +2,21 @@ import pytest
 import os
 import tempfile
 from unittest.mock import Mock, patch, MagicMock
-from datetime import datetime
+from datetime import datetime, date
 import json
-
-# Importar las funciones que vamos a probar
-from app.main import process_bank_statement_pdf, categorize_transaction_openai
-from app.auth import extract_transactions_with_ai
-
-# Importar la función de OCR directamente desde el módulo
 import sys
-sys.path.append('.')
+
+# Agregar el directorio del proyecto al path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Importar las funciones desde el módulo correcto
+from app.main import (
+    process_bank_statement_pdf, 
+    categorize_transaction_openai, 
+    detect_bank,
+    extract_standard_transactions
+)
+from app.auth import extract_transactions_with_ai
 from app.routers import extract_text_with_ocr
 
 
@@ -269,8 +274,8 @@ class TestAITransactionExtraction:
 class TestOCRTextExtraction:
     """Pruebas para la extracción de texto con OCR"""
 
-    @patch('pdf2image.convert_from_bytes')
-    @patch('pytesseract.image_to_string')
+    @patch('app.routers.convert_from_bytes')
+    @patch('app.routers.pytesseract.image_to_string')
     def test_extract_text_with_ocr_success(self, mock_tesseract, mock_convert):
         """Prueba la extracción exitosa de texto con OCR"""
         # Configurar mocks
@@ -284,7 +289,7 @@ class TestOCRTextExtraction:
         mock_convert.assert_called_once_with(b"fake_pdf_content")
         mock_tesseract.assert_called_once()
 
-    @patch('pdf2image.convert_from_bytes')
+    @patch('app.routers.convert_from_bytes')
     def test_extract_text_with_ocr_conversion_error(self, mock_convert):
         """Prueba que se maneje correctamente un error en la conversión de PDF a imagen"""
         mock_convert.side_effect = Exception("Conversion error")
@@ -293,8 +298,8 @@ class TestOCRTextExtraction:
         
         assert text == ""
 
-    @patch('pdf2image.convert_from_bytes')
-    @patch('pytesseract.image_to_string')
+    @patch('app.routers.convert_from_bytes')
+    @patch('app.routers.pytesseract.image_to_string')
     def test_extract_text_with_ocr_tesseract_error(self, mock_tesseract, mock_convert):
         """Prueba que se maneje correctamente un error de Tesseract"""
         mock_image = Mock()

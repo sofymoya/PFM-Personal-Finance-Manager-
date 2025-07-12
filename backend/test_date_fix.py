@@ -3,9 +3,23 @@
 Script de prueba para verificar que el fix de fechas funciona correctamente.
 """
 
+import pytest
 import requests
 import json
 import os
+
+@pytest.fixture
+def auth_token():
+    """Fixture para obtener un token de autenticación"""
+    login_data = {
+        "username": "prueba_front@correo.com",
+        "password": "claveFront123"
+    }
+    response = requests.post("http://localhost:8000/login", data=login_data)
+    if response.status_code == 200:
+        token_data = response.json()
+        return token_data["access_token"]
+    # No return None, just let it return implicitly
 
 def test_login():
     """Prueba el login para obtener un token"""
@@ -17,21 +31,26 @@ def test_login():
     response = requests.post("http://localhost:8000/login", data=login_data)
     if response.status_code == 200:
         token_data = response.json()
-        return token_data["access_token"]
+        token = token_data["access_token"]
+        assert token is not None
+        # No return
     else:
         print(f"❌ Error en login: {response.status_code} - {response.text}")
-        return None
+        assert False, f"Login falló con status {response.status_code}"
 
-def test_upload_pdf(token):
+
+def test_upload_pdf(auth_token):
     """Prueba subir el PDF de Santander"""
-    headers = {"Authorization": f"Bearer {token}"}
+    if not auth_token:
+        pytest.skip("No hay token válido para la prueba")
+    
+    headers = {"Authorization": f"Bearer {auth_token}"}
     
     # Usar el PDF que ya sabemos que funciona
     pdf_path = "uploaded_pdfs/Estado de cuenta abril 2025-2.pdf"
     
     if not os.path.exists(pdf_path):
-        print(f"❌ No se encontró el archivo: {pdf_path}")
-        return
+        pytest.skip(f"No se encontró el archivo: {pdf_path}")
     
     with open(pdf_path, "rb") as f:
         files = {"file": ("Estado de cuenta abril 2025-2.pdf", f, "application/pdf")}
@@ -50,32 +69,12 @@ def test_upload_pdf(token):
             
             if len(result['transacciones_guardadas']) > 5:
                 print(f"  ... y {len(result['transacciones_guardadas']) - 5} más")
+            
+            assert len(result['transacciones_guardadas']) > 0, "No se guardaron transacciones"
         else:
             print("❌ No se guardaron transacciones")
-            
-        return result
+            assert False, "No se guardaron transacciones"
+        # No return
     else:
         print(f"❌ Error subiendo PDF: {response.status_code} - {response.text}")
-        return None
-
-def main():
-    print("🧪 Probando fix de fechas...")
-    
-    # Probar login
-    token = test_login()
-    if not token:
-        print("❌ No se pudo obtener token. Abortando.")
-        return
-    
-    print("✅ Login exitoso")
-    
-    # Probar upload
-    result = test_upload_pdf(token)
-    
-    if result and result['transacciones_guardadas']:
-        print("\n🎉 ¡Fix de fechas exitoso! Las transacciones se guardaron correctamente.")
-    else:
-        print("\n❌ El fix no funcionó. Revisar logs del backend.")
-
-if __name__ == "__main__":
-    main() 
+        assert False, f"Upload PDF falló con status {response.status_code}" 
