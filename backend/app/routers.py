@@ -19,52 +19,52 @@ import os
 router = APIRouter()
 
 # Usuario
-@router.post('/usuarios/', response_model=schemas.Usuario)
-def crear_usuario(usuario: schemas.UsuarioCreate, db: Session = Depends(deps.get_db)):
-    db_usuario = crud.get_usuario_by_email(db, usuario.email)
+@router.post('/usuarios/', response_model=schemas.User)
+def crear_usuario(usuario: schemas.UserCreate, db: Session = Depends(deps.get_db)):
+    db_usuario = crud.get_user_by_email(db, usuario.email)
     if db_usuario:
         raise HTTPException(status_code=400, detail="Email ya registrado")
-    return crud.create_usuario(db, usuario)
+    return crud.create_user(db, usuario)
 
-@router.get('/usuarios/', response_model=List[schemas.Usuario])
+@router.get('/usuarios/', response_model=List[schemas.User])
 def listar_usuarios(db: Session = Depends(deps.get_db)):
-    return crud.get_usuarios(db)
+    return crud.get_users(db)
 
 # Categoría
-@router.get('/categorias/', response_model=List[schemas.Categoria])
-def listar_categorias(db: Session = Depends(deps.get_db)):
-    return crud.get_categorias(db)
+# @router.get('/categorias/', response_model=List[schemas.Category])
+# def listar_categorias(db: Session = Depends(deps.get_db)):
+#     return crud.get_categories(db)
 
-@router.post('/categorias/', response_model=schemas.Categoria)
-def crear_categoria(categoria: schemas.CategoriaCreate, db: Session = Depends(deps.get_db)):
-    return crud.create_categoria(db, categoria)
+# @router.post('/categorias/', response_model=schemas.Category)
+# def crear_categoria(categoria: schemas.CategoryCreate, db: Session = Depends(deps.get_db)):
+#     return crud.create_category(db, categoria)
 
 # Transacción
-@router.get('/usuarios/{usuario_id}/transacciones/', response_model=List[schemas.Transaccion])
+@router.get('/usuarios/{usuario_id}/transacciones/', response_model=List[schemas.Transaction])
 def listar_transacciones(usuario_id: int, db: Session = Depends(deps.get_db)):
-    return crud.get_transacciones(db, usuario_id)
+    return crud.get_transactions(db, usuario_id)
 
-@router.post('/usuarios/{usuario_id}/transacciones/', response_model=schemas.Transaccion)
-def crear_transaccion(usuario_id: int, transaccion: schemas.TransaccionCreateWithCategory, db: Session = Depends(deps.get_db)):
-    return crud.create_transaccion(db, transaccion, usuario_id)
+@router.post('/usuarios/{usuario_id}/transacciones/', response_model=schemas.Transaction)
+def crear_transaccion(usuario_id: int, transaccion: schemas.TransactionCreate, db: Session = Depends(deps.get_db)):
+    return crud.create_transaction(db, transaccion, usuario_id)
 
-@router.put('/usuarios/{usuario_id}/transacciones/{transaccion_id}', response_model=schemas.Transaccion)
-def actualizar_transaccion(usuario_id: int, transaccion_id: int, transaccion: schemas.TransaccionCreate, db: Session = Depends(deps.get_db)):
-    return crud.update_transaccion(db, transaccion_id, usuario_id, transaccion)
+@router.put('/usuarios/{usuario_id}/transacciones/{transaccion_id}', response_model=schemas.Transaction)
+def actualizar_transaccion(usuario_id: int, transaccion_id: int, transaccion: schemas.TransactionCreate, db: Session = Depends(deps.get_db)):
+    return crud.update_transaction(db, transaccion_id, usuario_id, transaccion)
 
-@router.patch('/usuarios/{usuario_id}/transacciones/{transaccion_id}/categoria', response_model=schemas.Transaccion)
-def actualizar_categoria_transaccion(usuario_id: int, transaccion_id: int, categoria: schemas.TransaccionUpdateCategory, db: Session = Depends(deps.get_db)):
-    return crud.update_transaction_category(db, transaccion_id, usuario_id, categoria.categoria)
+# @router.patch('/usuarios/{usuario_id}/transacciones/{transaccion_id}/categoria', response_model=schemas.Transaction)
+# def actualizar_categoria_transaccion(usuario_id: int, transaccion_id: int, categoria: schemas.TransactionUpdateCategory, db: Session = Depends(deps.get_db)):
+#     return crud.update_transaction_category(db, transaccion_id, usuario_id, categoria.category)
 
 @router.delete('/usuarios/{usuario_id}/transacciones/{transaccion_id}')
 def eliminar_transaccion(usuario_id: int, transaccion_id: int, db: Session = Depends(deps.get_db)):
-    crud.delete_transaccion(db, transaccion_id, usuario_id)
+    crud.delete_transaction(db, transaccion_id, usuario_id)
     return {"message": "Transacción eliminada"}
 
 # Login
 @router.post('/login')
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(deps.get_db)):
-    usuario = crud.get_usuario_by_email(db, form_data.username)
+    usuario = crud.get_user_by_email(db, form_data.username)
     if not usuario or not auth.verify_password(form_data.password, usuario.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales incorrectas")
     access_token = auth.create_access_token({"sub": str(usuario.id)})

@@ -166,32 +166,49 @@ class TestPDFProcessing:
 class TestOpenAICategorization:
     """Pruebas para la categorización con OpenAI"""
 
-    @patch('openai.chat.completions.create')
-    def test_categorize_transaction_openai_success(self, mock_openai):
+    @patch('openai.OpenAI')
+    def test_categorize_transaction_openai_success(self, mock_openai_class):
         """Prueba la categorización exitosa con OpenAI"""
-        # Configurar el mock de OpenAI
+        # Configurar el mock del cliente OpenAI
+        mock_client = Mock()
         mock_response = Mock()
         mock_response.choices = [Mock()]
         mock_response.choices[0].message.content = "supermercado"
-        mock_openai.return_value = mock_response
+        mock_client.chat.completions.create.return_value = mock_response
+        mock_openai_class.return_value = mock_client
         
         categoria = categorize_transaction_openai("COMPRA TARJETA OXXO MONTERREY", "fake_api_key")
         
         assert categoria == "supermercado"
-        mock_openai.assert_called_once()
+        mock_client.chat.completions.create.assert_called_once()
 
-    @patch('openai.chat.completions.create')
-    def test_categorize_transaction_openai_handles_error(self, mock_openai):
+    @patch('openai.OpenAI')
+    def test_categorize_transaction_openai_handles_error(self, mock_openai_class):
         """Prueba que se maneje correctamente un error de OpenAI"""
-        mock_openai.side_effect = Exception("API Error")
+        mock_client = Mock()
+        mock_client.chat.completions.create.side_effect = Exception("API Error")
+        mock_openai_class.return_value = mock_client
         
-        # Debería manejar el error sin fallar
-        try:
-            categoria = categorize_transaction_openai("COMPRA TARJETA OXXO MONTERREY", "fake_api_key")
-            # Si no falla, debería devolver una categoría por defecto o vacía
-            assert isinstance(categoria, str)
-        except Exception:
-            pytest.fail("La función debería manejar el error de OpenAI")
+        # Ahora debería manejar el error y usar categorización básica
+        categoria = categorize_transaction_openai("COMPRA TARJETA OXXO MONTERREY", "fake_api_key")
+        
+        # Debería devolver una categoría basada en palabras clave
+        assert categoria == "conveniencia"
+
+    def test_categorize_transaction_openai_fallback_categorization(self):
+        """Prueba la categorización de respaldo basada en palabras clave"""
+        with patch('openai.OpenAI') as mock_openai_class:
+            mock_client = Mock()
+            mock_client.chat.completions.create.side_effect = Exception("API Error")
+            mock_openai_class.return_value = mock_client
+            
+            # Probar diferentes tipos de transacciones
+            assert categorize_transaction_openai("COMPRA TARJETA OXXO", "fake_api_key") == "conveniencia"
+            assert categorize_transaction_openai("RESTAURANTE PIZZA HUT", "fake_api_key") == "restaurante"
+            assert categorize_transaction_openai("UBER TRIP", "fake_api_key") == "transporte"
+            assert categorize_transaction_openai("SU PAGO SPEI", "fake_api_key") == "ingreso"
+            assert categorize_transaction_openai("RETIRO CAJERO", "fake_api_key") == "retiro"
+            assert categorize_transaction_openai("TRANSACCION DESCONOCIDA", "fake_api_key") == "otros"
 
 
 class TestAITransactionExtraction:

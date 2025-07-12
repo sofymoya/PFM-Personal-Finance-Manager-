@@ -242,7 +242,7 @@ def extract_text_with_ocr_fallback(pdf_path: str):
             print(f"📄 PDF abierto correctamente. Páginas: {len(pdf.pages)}")
             
             # Intentar extracción normal primero
-    extracted_text = ""
+            extracted_text = ""
             for i, page in enumerate(pdf.pages):
                 page_text = page.extract_text()
                 if page_text:
@@ -509,35 +509,68 @@ def process_bank_statement_pdf(file_path: str, api_key: str) -> Dict[str, Any]:
         return {
             "banco": "Desconocido",
             "transacciones": [],
-            "texto_extraido": ""
+            "texto_extraido": "",
+            "metodo": "ninguno"
         }
     
     # Detect bank
     banco = detect_bank(extracted_text)
     print(f"🏦 Banco detectado: {banco}")
     
-    # Use agentic extraction as primary method
-    print("🤖 Usando extractor agéntico para extracción inteligente...")
+    # Intentar extracción con extractor agéntico
     try:
+        from .agentic_extractor import AgenticDocumentExtractor
         extractor = AgenticDocumentExtractor(api_key)
-        transactions = extractor.extract_transactions(extracted_text, banco)
-        
-        if transactions:
-            print(f"✅ Extractor agéntico encontró {len(transactions)} transacciones")
+        agentic_transactions = extractor.extract_transactions(extracted_text, banco)
+        if agentic_transactions:
+            print(f"🤖 Extractor agéntico encontró {len(agentic_transactions)} transacciones")
+            # Categorizar transacciones
+            for transaction in agentic_transactions:
+                transaction["categoria"] = categorize_transaction_openai(transaction["descripcion"], api_key)
             return {
                 "banco": banco,
-                "transacciones": transactions,
-                "texto_extraido": extracted_text
+                "transacciones": agentic_transactions,
+                "texto_extraido": extracted_text,
+                "metodo": "extractor_agentico"
             }
-        else:
-            print("⚠️ Extractor agéntico no encontró transacciones, intentando métodos alternativos...")
-            
     except Exception as e:
         print(f"❌ Error con extractor agéntico: {e}")
         print("🔄 Fallback a métodos tradicionales...")
     
-    # Fallback to traditional methods if agentic extraction fails
-    return _fallback_extraction(extracted_text, banco, api_key)
+    # Parser estándar
+    print("🏦 Usando parser estándar...")
+    standard_transactions = extract_standard_transactions(extracted_text)
+    
+    if standard_transactions:
+        print(f"📊 Parser estándar encontró {len(standard_transactions)} transacciones")
+        # Categorizar transacciones
+        for transaction in standard_transactions:
+            transaction["categoria"] = categorize_transaction_openai(transaction["descripcion"], api_key)
+        return {
+            "banco": banco,
+            "transacciones": standard_transactions,
+            "texto_extraido": extracted_text,
+            "metodo": "parser_estandar"
+        }
+    
+    # AI fallback simplificado (sin usar OpenAI para evitar errores de proxies)
+    print("🤖 Usando AI fallback simplificado...")
+    try:
+        # Intentar extracción básica con regex más agresivo
+        fallback_transactions = _fallback_extraction(extracted_text, banco, api_key)
+        if fallback_transactions.get("transacciones"):
+            print(f"📊 AI fallback encontró {len(fallback_transactions['transacciones'])} transacciones")
+            return fallback_transactions
+    except Exception as e:
+        print(f"❌ Error con AI fallback simplificado: {e}")
+    
+    print("❌ No se pudieron extraer transacciones con ningún método")
+    return {
+        "banco": banco,
+        "transacciones": [],
+        "texto_extraido": extracted_text,
+        "metodo": "ninguno"
+    }
 
 def _fallback_extraction(extracted_text: str, banco: str, api_key: str) -> Dict[str, Any]:
     """
@@ -623,16 +656,16 @@ def categorize_transaction_openai(descripcion: str, api_key: str):
     try:
         from openai import OpenAI
         client = OpenAI(api_key=api_key)
-    prompt = f"""
+        prompt = f"""
     Categoriza la siguiente transacción bancaria en una sola palabra (por ejemplo: supermercado, transporte, restaurante, ingreso, etc.):\n\n"{descripcion}"\n\nCategoría: """
         response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}],
-        max_tokens=3,
-        temperature=0
-    )
-    categoria = response.choices[0].message.content.strip()
-    return categoria
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=3,
+            temperature=0
+        )
+        categoria = response.choices[0].message.content.strip()
+        return categoria
     except Exception as e:
         print(f"Error en categorización OpenAI: {e}")
         # Categorización básica basada en palabras clave
@@ -723,13 +756,11 @@ def test_upload_pdf(file: UploadFile = File(...)):
     # Detectar banco del texto extraído
     extracted_text = ""
     try:
-        with open(file_location, "rb") as f:
-            import pdfplumber
-            with pdfplumber.open(f) as pdf:
-                for page in pdf.pages:
-                    text = page.extract_text()
-                    if text:
-                        extracted_text += text + "\n"
+        with pdfplumber.open(file_location) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text()
+                if text:
+                    extracted_text += text + "\n"
     except Exception as e:
         print(f"Error extrayendo texto para detección de banco: {e}")
     
@@ -761,7 +792,7 @@ def _parse_date(date_str: str):
     # Convierte '04-Jun-2025' o '04-ABR-2025' a objeto date
     try:
         # Primero intentar con el formato original
-    return datetime.strptime(date_str, "%d-%b-%Y").date()
+        return datetime.strptime(date_str, "%d-%b-%Y").date()
     except ValueError:
         # Si falla, intentar con formato en mayúsculas (como ABR, ENE, FEB, etc.)
         # Mapear abreviaciones en mayúsculas a formato estándar
@@ -815,44 +846,58 @@ def extract_standard_transactions(text: str) -> List[Dict[str, Any]]:
         line = line.strip()
         if not line:
             continue
-            
-        # Multiple patterns for different transaction formats
+        # Patrones mejorados para diferentes formatos de transacción
         patterns = [
-            # Original pattern: 04-Jun-2025  04-Jun-2025  SU PAGO...  + $9,153.00
-            r"(\d{2}-[A-Za-z]{3}-\d{4})\s+\d{2}-[A-Za-z]{3}-\d{4}\s+(.+?)\s+([+-])\s*\\$([\d,]+\.\d{2})",
-            # Simplified pattern: 04-Jun-2025  SU PAGO...  + $9,153.00
-            r"(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+([+-])\s*\\$([\d,]+\.\d{2})",
-            # Pattern with variable spaces: 04-Jun-2025  SU PAGO...  +$9,153.00
-            r"(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+([+-])\\$([\d,]+\.\d{2})",
-            # Pattern without peso symbol: 04-Jun-2025  SU PAGO...  + 9,153.00
+            # Dos fechas, descripción, signo, monto con $
+            r"(\d{2}-[A-Za-z]{3}-\d{4})\s+(\d{2}-[A-Za-z]{3}-\d{4})?\s+(.+?)\s+([+-])\s*\$([\d,]+\.\d{2})",
+            # Una fecha, descripción, signo, monto con $
+            r"(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+([+-])\s*\$([\d,]+\.\d{2})",
+            # Una fecha, descripción, monto con $ (sin signo)
+            r"(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+\$([\d,]+\.\d{2})",
+            # Una fecha, descripción, signo, monto sin $
             r"(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+([+-])\s*([\d,]+\.\d{2})",
         ]
-        
         for pattern in patterns:
-            match = re.match(pattern, line)
+            match = re.search(pattern, line)
             if match:
-                try:
+                # Extraer los grupos según el patrón
+                if len(match.groups()) == 5:
                     fecha_operacion = match.group(1)
-                    descripcion = match.group(2).strip()
+                    fecha_cargo = match.group(2) if match.group(2) else match.group(1)
+                    descripcion = match.group(3)
+                    signo = match.group(4)
+                    monto = match.group(5)
+                elif len(match.groups()) == 4:
+                    fecha_operacion = match.group(1)
+                    fecha_cargo = match.group(1)
+                    descripcion = match.group(2)
                     signo = match.group(3)
-                    monto_str = match.group(4).replace(",", "")
-                    monto = float(monto_str)
-                    tipo = "abono" if signo == "+" else "cargo"
-                    if tipo == "cargo":
-                        monto = -monto
-                    
-                    transactions.append({
-                        "fecha_operacion": fecha_operacion,
-                        "descripcion": descripcion,
-                        "monto": monto,
-                        "tipo": tipo,
-                        "categoria": "sin_categoria"
-                    })
-                    break  # If we found a match, don't try more patterns
-                except (ValueError, IndexError) as e:
-                    print(f"Error procesando línea: {line}, Error: {e}")
+                    monto = match.group(4)
+                elif len(match.groups()) == 3:
+                    fecha_operacion = match.group(1)
+                    fecha_cargo = match.group(1)
+                    descripcion = match.group(2)
+                    signo = '+'
+                    monto = match.group(3)
+                else:
                     continue
-                    
+                # Normalizar monto
+                monto = float(monto.replace(',', ''))
+                if signo == '-':
+                    monto = -monto
+                
+                # Determinar tipo basado en el signo del monto
+                tipo = "abono" if monto > 0 else "cargo"
+                
+                transactions.append({
+                    "fecha_operacion": fecha_operacion,
+                    "fecha_cargo": fecha_cargo,
+                    "descripcion": descripcion.strip(),
+                    "monto": monto,
+                    "tipo": tipo,
+                    "categoria": "sin_categoria"
+                })
+                break
     return transactions
 
 def extract_hsbc_transactions(extracted_text: str) -> List[dict]:

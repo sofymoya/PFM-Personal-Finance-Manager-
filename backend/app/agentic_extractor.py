@@ -13,6 +13,13 @@ class AgenticDocumentExtractor:
             if 'proxy' in key.lower():
                 del os.environ[key]
         
+        # Limpiar cualquier configuración global de OpenAI
+        import openai
+        if hasattr(openai, 'api_key'):
+            delattr(openai, 'api_key')
+        if hasattr(openai, '_client'):
+            delattr(openai, '_client')
+        
         # Crear cliente sin argumentos adicionales
         self.client = OpenAI(api_key=api_key)
         
