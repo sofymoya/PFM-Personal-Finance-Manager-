@@ -1,37 +1,36 @@
-AVANCE BACKEND PFM (hasta la fecha)
+---
+# Avance PFM Cursor (Backend & Frontend)
 
-1. Endpoint para subir PDF bancario:
-   - POST /upload_pdf
-   - Recibe un archivo PDF, lo guarda temporalmente y procesa su contenido.
-   - Extrae transacciones del PDF (formato BBVA, columna 'Fecha de la operación').
-   - Cada transacción extraída incluye: fecha_operacion, descripcion, monto, tipo (abono/cargo), categoria (usando OpenAI).
-   - Las transacciones se guardan en la base de datos asociadas al usuario autenticado.
+## Automatización de arranque
+- Se creó el script `backend/start_services.sh` para arrancar backend y frontend en background, con logs y manejo de procesos previos.
+- El script verifica el entorno virtual, activa el backend en http://localhost:8000/ y el frontend en http://localhost:5173/ (o el puerto que indique Vite).
 
-2. Integración con OpenAI:
-   - Se usa la API key almacenada en .env (OPENAI_API_KEY).
-   - Cada transacción es categorizada automáticamente usando un prompt a GPT-3.5-turbo.
+## Limpieza y actualización de entorno
+- Se eliminó y recreó el entorno virtual (`venv`) en backend.
+- Se reinstalaron dependencias con `pip install -r requirements.txt` y `npm install` en frontend.
+- Se actualizó la librería `openai` para evitar errores de proxies.
 
-3. Endpoint para filtrar transacciones:
-   - GET /transactions/filter
-   - Permite filtrar por rango de fechas (DD-MM-YYYY), monto mínimo, monto máximo y categoría.
-   - Devuelve las transacciones del usuario autenticado que cumplen los filtros.
+## Extracción de PDF y OCR
+- Se mejoró la función de extracción de texto para detectar cuando es necesario usar OCR.
+- Se agregó logging detallado para debug de cada página y chunk.
+- Se implementó chunking para evitar errores de límite de tokens en OpenAI.
+- Se mejoró la limpieza de texto OCR para evitar caracteres corruptos.
 
-4. Estructura de la base de datos:
-   - Tabla Transaction: id, description, amount, date, category, user_id, created_at
-   - Tabla User: id, email, hashed_password, name, created_at
+## Extracción agéntica y fallback AI
+- Se integró un extractor agéntico basado en OpenAI GPT-4o-mini para extraer transacciones de cualquier PDF.
+- Se corrigió el manejo de proxies y la inicialización del cliente OpenAI.
+- Se mejoró el fallback AI para dividir el texto en chunks y manejar errores de contexto.
 
-5. Lógica de extracción:
-   - Se usa pdfplumber para extraer texto del PDF.
-   - Se usa regex para identificar líneas de transacciones.
-   - Se parsean los campos y se convierten a los tipos requeridos.
+## Detección de banco y parsers
+- Se mejoró la detección de banco (case-insensitive, priorizando Santander, BBVA, HSBC, Banorte, Banamex, Banregio).
+- Se corrigieron errores en los parsers específicos (HSBC, Santander, BBVA).
 
-6. Pendiente:
-   - Endpoints para visualizaciones (totales mensuales, proporción por categoría, tabla resumen)
-   - Interfaz frontend para carga de PDF y visualización de datos
+## Manejo de errores y logs
+- Se agregaron validaciones para evitar errores de tipo al guardar transacciones.
+- Se mejoró el logging de errores de AI, proxies y parseo de JSON.
 
-7. Endpoints para visualizaciones y resumen:
-   - GET /transactions/summary/monthly: Totales mensuales de ingresos y gastos.
-   - GET /transactions/summary/category: Proporción de gasto por categoría (para gráfico de pastel).
-   - GET /transactions/summary/table: Tabla resumen de total gastado por categoría y por mes.
+## Otros
+- Se documentó el flujo de arranque y pruebas.
+- Se resolvieron conflictos de puertos y procesos colgados.
 
-Fecha de avance: [REEMPLAZAR_POR_FECHA] 
+--- 

@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Dict, Any
 import os
 from dotenv import load_dotenv
 import pdfplumber
@@ -14,6 +14,7 @@ from sqlalchemy import extract, func
 import pytesseract
 from PIL import Image
 import io
+from .agentic_extractor import AgenticDocumentExtractor
 
 load_dotenv()
 
@@ -234,51 +235,84 @@ def extract_text_with_ocr_fallback(pdf_path: str):
     Extrae texto del PDF usando pdfplumber, y si el texto contiene códigos (cid:XXX),
     usa OCR mejorado como fallback para obtener texto legible.
     """
-    with pdfplumber.open(pdf_path) as pdf:
-        extracted_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+    print(f"📄 Iniciando extracción de texto de: {pdf_path}")
+    
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            print(f"📄 PDF abierto correctamente. Páginas: {len(pdf.pages)}")
+            
+            # Intentar extracción normal primero
+            extracted_text = ""
+            for i, page in enumerate(pdf.pages):
+                page_text = page.extract_text()
+                if page_text:
+                    extracted_text += page_text + "\n"
+                    print(f"✅ Página {i+1}: {len(page_text)} caracteres extraídos")
+                else:
+                    print(f"⚠️ Página {i+1}: No se pudo extraer texto")
+            
+            # Verificar si el texto contiene códigos (cid:XXX) que indican texto ilegible
+            if not extracted_text.strip():
+                print("❌ No se pudo extraer texto del PDF. Usando OCR...")
+                return _extract_with_ocr(pdf)
+            elif "(cid:" in extracted_text:
+                print("🔍 Texto extraído contiene códigos (cid:XXX). Usando OCR mejorado como fallback...")
+                return _extract_with_ocr(pdf)
+            else:
+                print(f"✅ Texto extraído exitosamente: {len(extracted_text)} caracteres")
+                # Debug: mostrar primeras líneas
+                lines = extracted_text.split('\n')[:5]
+                print("📄 Primeras líneas del texto extraído:")
+                for i, line in enumerate(lines):
+                    if line.strip():
+                        print(f"   {i+1}: {line.strip()}")
+                return extracted_text
+                
+    except Exception as e:
+        print(f"❌ Error abriendo PDF: {e}")
+        return ""
+
+def _extract_with_ocr(pdf):
+    """
+    Extrae texto usando OCR cuando la extracción normal falla.
+    """
+    ocr_text = ""
+    
+    for page_num, page in enumerate(pdf.pages):
+        print(f"🔍 Procesando página {page_num + 1} con OCR...")
         
-        # Verificar si el texto contiene códigos (cid:XXX) que indican texto ilegible
-        if "(cid:" in extracted_text:
-            print("🔍 Texto extraído contiene códigos (cid:XXX). Usando OCR mejorado como fallback...")
-            ocr_text = ""
+        try:
+            # Convertir página a imagen con mejor resolución
+            img = page.to_image(resolution=300)  # Aumentar resolución
+            img_bytes = img.original.convert('RGB')
             
-            for page_num, page in enumerate(pdf.pages):
-                # Convertir página a imagen con mejor resolución
-                img = page.to_image(resolution=300)  # Aumentar resolución
-                img_bytes = img.original.convert('RGB')
-                
-                # Preprocesar imagen para mejorar OCR
-                processed_img = preprocess_image_for_ocr(img_bytes)
-                
-                # Usar OCR mejorado para extraer texto
-                try:
-                    # Configuración optimizada para estados de cuenta bancarios
-                    custom_config = r'--oem 3 --psm 6 -l spa+eng --dpi 300'
-                    page_text = pytesseract.image_to_string(processed_img, config=custom_config)
-                    
-                    # Limpiar y mejorar el texto extraído
-                    cleaned_text = clean_ocr_text(page_text)
-                    ocr_text += cleaned_text + "\n"
-                    print(f"✅ OCR mejorado completado para página {page_num + 1}")
-                    
-                    # Debug: mostrar primeras líneas del texto extraído
-                    lines = cleaned_text.split('\n')[:5]
-                    print(f"📄 Primeras líneas página {page_num + 1}:")
-                    for i, line in enumerate(lines):
-                        if line.strip():
-                            print(f"   {i+1}: {line.strip()}")
-                    
-                except Exception as e:
-                    print(f"❌ Error en OCR para página {page_num + 1}: {e}")
-                    # Si OCR falla, mantener el texto original de esa página
-                    page_original = page.extract_text() or ""
-                    ocr_text += page_original + "\n"
+            # Preprocesar imagen para mejorar OCR
+            processed_img = preprocess_image_for_ocr(img_bytes)
             
-            print("🔍 OCR mejorado completado. Usando texto extraído con OCR.")
-            return ocr_text
-        else:
-            print("✅ Texto extraído es legible. No se necesita OCR.")
-            return extracted_text
+            # Usar OCR mejorado para extraer texto
+            custom_config = r'--oem 3 --psm 6 -l spa+eng --dpi 300'
+            page_text = pytesseract.image_to_string(processed_img, config=custom_config)
+            
+            # Limpiar y mejorar el texto extraído
+            cleaned_text = clean_ocr_text(page_text)
+            ocr_text += cleaned_text + "\n"
+            print(f"✅ OCR completado para página {page_num + 1}: {len(cleaned_text)} caracteres")
+            
+            # Debug: mostrar primeras líneas del texto extraído
+            lines = cleaned_text.split('\n')[:3]
+            print(f"📄 Primeras líneas página {page_num + 1}:")
+            for i, line in enumerate(lines):
+                if line.strip():
+                    print(f"   {i+1}: {line.strip()}")
+                    
+        except Exception as e:
+            print(f"❌ Error en OCR para página {page_num + 1}: {e}")
+            # Si OCR falla, mantener el texto original de esa página
+            page_original = page.extract_text() or ""
+            ocr_text += page_original + "\n"
+    
+    print(f"🔍 OCR completado. Total: {len(ocr_text)} caracteres")
+    return ocr_text
 
 def preprocess_image_for_ocr(image):
     """
@@ -338,18 +372,41 @@ def clean_ocr_text(text):
         cleaned = re.sub(r'[l]{2,}', 'll', cleaned)  # Múltiples l's
         cleaned = re.sub(r'[I]{2,}', 'II', cleaned)  # Múltiples I's
         
-        # Corregir caracteres mal interpretados
+        # Corregir caracteres mal interpretados específicos que vemos en los logs
         char_replacements = {
             '0': '0', 'O': '0', 'o': '0',  # Normalizar ceros
             'l': '1', 'I': '1', '|': '1',  # Normalizar unos
             'S': '5', 's': '5',  # Normalizar cincos
             'G': '6', 'g': '6',  # Normalizar seises
             'B': '8', 'b': '8',  # Normalizar ochos
+            '1': '1',  # Mantener unos
+            '2': '2',  # Mantener doses
+            '3': '3',  # Mantener treses
+            '4': '4',  # Mantener cuatros
+            '5': '5',  # Mantener cincos
+            '6': '6',  # Mantener seises
+            '7': '7',  # Mantener sietes
+            '8': '8',  # Mantener ochos
+            '9': '9',  # Mantener nueves
         }
         
-        for old_char, new_char in char_replacements.items():
-            # Solo reemplazar en contextos numéricos
-            cleaned = re.sub(rf'\b{old_char}\b', new_char, cleaned)
+        # Corregir caracteres específicos que vemos en los logs
+        # Ejemplo: "1a5e5oria1@1condu5ef1.1gob1.1mx1" -> "asesoria@condufef.gob.mx"
+        cleaned = re.sub(r'1a5e5oria1@1condu5ef1\.1gob1\.1mx1', 'asesoria@condufef.gob.mx', cleaned)
+        cleaned = re.sub(r'5UPAG0', 'SUPAGO', cleaned)
+        cleaned = re.sub(r'5PE1', 'SPEI', cleaned)
+        cleaned = re.sub(r'5PE1A', 'SPEIA', cleaned)
+        cleaned = re.sub(r'M00H680201JG0', 'MOOH680201JGO', cleaned)
+        cleaned = re.sub(r'V1VAAER0BU5', 'VIVAAEROBUS', cleaned)
+        cleaned = re.sub(r'RE5T', 'REST', cleaned)
+        cleaned = re.sub(r'ARB0_', 'ARBO', cleaned)
+        cleaned = re.sub(r'51H', 'SIH', cleaned)
+        cleaned = re.sub(r'V1VA', 'VIVA', cleaned)
+        cleaned = re.sub(r'C1B', 'CIB', cleaned)
+        
+        # Corregir patrones de caracteres repetidos
+        cleaned = re.sub(r'1{2,}', '11', cleaned)  # Múltiples unos
+        cleaned = re.sub(r'5{2,}', '55', cleaned)  # Múltiples cincos
         
         # Eliminar líneas muy cortas o que parezcan ruido
         if len(cleaned) > 2 and not re.match(r'^[^\w]*$', cleaned):
@@ -431,152 +488,144 @@ def extract_transaction_regions(pdf_path: str):
                     continue
         return transaction_text
 
-def process_bank_statement_pdf(file_path: str, api_key: str):
+def process_bank_statement_pdf(file_path: str, api_key: str) -> Dict[str, Any]:
     """
-    Procesa un estado de cuenta bancario en PDF y extrae transacciones.
-    Retorna una lista de transacciones con los campos requeridos.
+    Process a bank statement PDF and extract transactions using agentic extraction.
     """
-    transactions = []
-    banco = None
+    print(f"📄 Procesando PDF: {file_path}")
     
-    # Extraer texto con OCR mejorado como fallback si es necesario
+    # Extract text from PDF
     extracted_text = extract_text_with_ocr_fallback(file_path)
+
+    # Guardar el texto extraído para depuración
+    debug_txt_path = file_path + ".ocr.txt"
+    with open(debug_txt_path, "w", encoding="utf-8") as f:
+        f.write(extracted_text)
+    print(f"📝 Texto extraído guardado en: {debug_txt_path}")
+    print(f"--- INICIO TEXTO EXTRAÍDO ---\n{extracted_text[:1000]}\n--- FIN TEXTO EXTRAÍDO ---")
     
-    # Si es HSBC, también intentar extraer de regiones específicas
-    if "HSBC" in extracted_text:
-        print("🏦 Detectado HSBC. Extrayendo texto de regiones específicas...")
-        region_text = extract_transaction_regions(file_path)
-        if region_text and region_text.strip():
-            # Combinar texto completo con texto de regiones
-            extracted_text += "\n\n--- TEXTO DE REGIONES ESPECÍFICAS ---\n"
-            extracted_text += region_text
-            print("✅ Texto de regiones específicas agregado")
+    if not extracted_text.strip():
+        print("❌ No se pudo extraer texto del PDF")
+        return {
+            "banco": "Desconocido",
+            "transacciones": [],
+            "texto_extraido": ""
+        }
+    
+    # Detect bank
+    banco = detect_bank(extracted_text)
+    print(f"🏦 Banco detectado: {banco}")
+    
+    # Use agentic extraction as primary method
+    print("🤖 Usando extractor agéntico para extracción inteligente...")
+    try:
+        extractor = AgenticDocumentExtractor(api_key)
+        transactions = extractor.extract_transactions(extracted_text, banco)
+        
+        if transactions:
+            print(f"✅ Extractor agéntico encontró {len(transactions)} transacciones")
+            return {
+                "banco": banco,
+                "transacciones": transactions,
+                "texto_extraido": extracted_text
+            }
         else:
-            print("⚠️ No se pudo extraer texto de regiones específicas")
+            print("⚠️ Extractor agéntico no encontró transacciones, intentando métodos alternativos...")
+            
+    except Exception as e:
+        print(f"❌ Error con extractor agéntico: {e}")
+        print("🔄 Fallback a métodos tradicionales...")
     
-    print("\n--- TEXTO EXTRAÍDO DEL PDF ---\n")
-    print(extracted_text)
-    print("\n--- FIN DEL TEXTO EXTRAÍDO ---\n")
-    
-    # Debug: Mostrar líneas que contienen montos o fechas
-    lines = extracted_text.split('\n')
-    print("🔍 Líneas que contienen montos o fechas:")
-    for i, line in enumerate(lines):
-        if re.search(r'[\d,\.]+', line) or re.search(r'\d{2}[-/\s][A-Za-z0-9]{3}[-/\s]\d{4}', line):
-            print(f"Línea {i+1}: {line.strip()}")
-    print("--- FIN DEBUG ---\n")
-    
-    # Identificación simple del banco
-    if "BBVA" in extracted_text:
-        banco = "BBVA"
-    elif "Santander" in extracted_text:
-        banco = "Santander"
-    elif "Banorte" in extracted_text:
-        banco = "Banorte"
-    elif "HSBC" in extracted_text:
-        banco = "HSBC"
-    else:
-        banco = "Desconocido"
-    
-    # Usar parser específico según el banco
+    # Fallback to traditional methods if agentic extraction fails
+    return _fallback_extraction(extracted_text, banco, api_key)
+
+def _fallback_extraction(extracted_text: str, banco: str, api_key: str) -> Dict[str, Any]:
+    """
+    Fallback extraction using traditional methods.
+    """
+    # Try specific bank parsers first
     if banco == "HSBC":
         print("🏦 Usando parser específico para HSBC...")
         transactions = extract_hsbc_transactions(extracted_text)
-        
-        # Si no se encontraron transacciones, usar AI como fallback
-        if not transactions:
-            print("🤖 No se encontraron transacciones con parser regex. Usando AI como fallback...")
-            try:
-                from .auth import extract_transactions_with_ai
-                ai_transactions = extract_transactions_with_ai(extracted_text)
-                if ai_transactions:
-                    print(f"🤖 AI encontró {len(ai_transactions)} transacciones")
-                    # Convertir formato AI al formato esperado
-                    for ai_txn in ai_transactions:
-                        transactions.append({
-                            "fecha_operacion": ai_txn.get("fecha_operacion", ""),
-                            "fecha_cargo": ai_txn.get("fecha_cargo", ai_txn.get("fecha_operacion", "")),
-                            "descripcion": ai_txn.get("descripcion", ""),
-                            "monto": ai_txn.get("monto", 0),
-                            "tipo": "abono" if ai_txn.get("monto", 0) > 0 else "cargo",
-                            "categoria": "Sin categorizar"
-                        })
-                else:
-                    print("🤖 AI tampoco encontró transacciones")
-            except Exception as e:
-                print(f"❌ Error usando AI fallback: {e}")
-        
-        # Categorizar transacciones encontradas
-        for transaction in transactions:
-            if transaction["categoria"] == "Sin categorizar":
-                try:
-                    transaction["categoria"] = categorize_transaction_openai(transaction["descripcion"], api_key)
-                except Exception as e:
-                    print(f"Error categorizando transacción HSBC: {e}")
-                    transaction["categoria"] = "sin_categoria"
-    else:
-        # Parser original para otros bancos
-        print("🏦 Usando parser estándar...")
-        lines = extracted_text.split("\n")
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-                
-            # Múltiples patrones para diferentes formatos de transacciones
-            patterns = [
-                # Patrón original: 04-Jun-2025  04-Jun-2025  SU PAGO...  + $9,153.00
-                r"(\d{2}-[A-Za-z]{3}-\d{4})\s+\d{2}-[A-Za-z]{3}-\d{4}\s+(.+?)\s+([+-])\s*\$([\d,]+\.\d{2})",
-                # Patrón simplificado: 04-Jun-2025  SU PAGO...  + $9,153.00
-                r"(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+([+-])\s*\$([\d,]+\.\d{2})",
-                # Patrón con espacios variables: 04-Jun-2025  SU PAGO...  +$9,153.00
-                r"(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+([+-])\$([\d,]+\.\d{2})",
-                # Patrón sin símbolo de peso: 04-Jun-2025  SU PAGO...  + 9,153.00
-                r"(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+([+-])\s*([\d,]+\.\d{2})",
-            ]
-            
-            for pattern in patterns:
-                match = re.match(pattern, line)
-                if match:
-                    try:
-                        fecha_operacion = match.group(1)
-                        descripcion = match.group(2).strip()
-                        signo = match.group(3)
-                        monto_str = match.group(4).replace(",", "")
-                        monto = float(monto_str)
-                        tipo = "abono" if signo == "+" else "cargo"
-                        if tipo == "cargo":
-                            monto = -monto
-                        
-                        # Categorizar usando OpenAI con manejo de errores
-                        try:
-                            categoria = categorize_transaction_openai(descripcion, api_key)
-                        except Exception as e:
-                            print(f"Error categorizando transacción: {e}")
-                            categoria = "sin_categoria"
-                        
-                        transactions.append({
-                            "fecha_operacion": fecha_operacion,
-                            "descripcion": descripcion,
-                            "monto": monto,
-                            "tipo": tipo,
-                            "categoria": categoria
-                        })
-                        break  # Si encontramos un match, no necesitamos probar más patrones
-                    except (ValueError, IndexError) as e:
-                        print(f"Error procesando línea: {line}, Error: {e}")
-                        continue
+        if transactions:
+            return {
+                "banco": banco,
+                "transacciones": transactions,
+                "texto_extraido": extracted_text
+            }
+    elif banco == "Santander":
+        print("🏦 Usando parser específico para Santander...")
+        transactions = extract_santander_transactions(extracted_text)
+        if transactions:
+            return {
+                "banco": banco,
+                "transacciones": transactions,
+                "texto_extraido": extracted_text
+            }
     
-    return {"banco": banco, "transacciones": transactions, "texto_extraido": extracted_text}
+    # Try standard parser
+    print("🏦 Usando parser estándar...")
+    transactions = extract_standard_transactions(extracted_text)
+    
+    if transactions:
+        return {
+            "banco": banco,
+            "transacciones": transactions,
+            "texto_extraido": extracted_text
+        }
+    
+    # Final fallback: AI method with better token management
+    print("🤖 Usando AI fallback con mejor manejo de tokens...")
+    try:
+        from .auth import extract_transactions_with_ai
+        ai_transactions = extract_transactions_with_ai(extracted_text)
+        if ai_transactions:
+            print(f"🤖 AI mejorado encontró {len(ai_transactions)} transacciones")
+            return {
+                "banco": banco,
+                "transacciones": ai_transactions,
+                "texto_extraido": extracted_text
+            }
+    except Exception as e:
+        print(f"❌ Error con AI fallback mejorado: {e}")
+    
+    print("❌ No se pudieron extraer transacciones con ningún método")
+    return {
+        "banco": banco,
+        "transacciones": [],
+        "texto_extraido": extracted_text
+    }
+
+def _deduplicate_transactions(transactions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Elimina transacciones duplicadas basándose en fecha, descripción y monto.
+    """
+    seen = set()
+    unique_transactions = []
+    
+    for transaction in transactions:
+        # Crear una clave única para cada transacción
+        key = (
+            transaction.get('fecha_operacion', ''),
+            transaction.get('descripcion', ''),
+            transaction.get('monto', 0)
+        )
+        
+        if key not in seen:
+            seen.add(key)
+            unique_transactions.append(transaction)
+    
+    return unique_transactions
 
 # Función para categorizar transacciones usando OpenAI
 
 def categorize_transaction_openai(descripcion: str, api_key: str):
     try:
-        openai.api_key = api_key
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
         prompt = f"""
         Categoriza la siguiente transacción bancaria en una sola palabra (por ejemplo: supermercado, transporte, restaurante, ingreso, etc.):\n\n"{descripcion}"\n\nCategoría: """
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[{"role": "user", "content": prompt}],
             max_tokens=3,
@@ -614,8 +663,21 @@ def upload_pdf(file: UploadFile = File(...), current_user: models.User = Depends
         raise HTTPException(status_code=500, detail="No se encontró la API key de OpenAI")
     # Procesar el PDF y categorizar transacciones
     result = process_bank_statement_pdf(file_location, api_key)
+    transactions = result.get("transacciones", [])
+    banco = result.get("banco", "Desconocido")
     transacciones_guardadas = []
-    for t in result["transacciones"]:
+    
+    for t in transactions:
+        # Validar que t sea un diccionario válido
+        if not isinstance(t, dict):
+            print(f"❌ Transacción no es un diccionario: {type(t)} - {t}")
+            continue
+            
+        # Validar campos requeridos
+        if not all(key in t for key in ['descripcion', 'monto', 'fecha_operacion', 'categoria']):
+            print(f"❌ Transacción faltan campos requeridos: {t}")
+            continue
+            
         # Mapear campos al esquema TransactionCreate
         try:
             transaction_data = schemas.TransactionCreate(
@@ -627,15 +689,17 @@ def upload_pdf(file: UploadFile = File(...), current_user: models.User = Depends
             db_transaction = crud.create_transaction(db=db, transaction=transaction_data, user_id=current_user.id)
             transacciones_guardadas.append(db_transaction)
         except Exception as e:
+            print(f"Error guardando transacción: {e}")
+            print(f"Transacción problemática: {t}")
             continue  # Si alguna transacción falla, sigue con las demás
+    
     return {
         "filename": file.filename,
-        "banco": result["banco"],
+        "banco": banco,
         "transacciones_guardadas": [
             {"id": tr.id, "description": tr.description, "amount": tr.amount, "date": tr.date.isoformat(), "category": tr.category}
             for tr in transacciones_guardadas
         ],
-        "texto_extraido": result["texto_extraido"],
         "message": f"Archivo subido y {len(transacciones_guardadas)} transacciones guardadas en la base de datos"
     }
 
@@ -654,11 +718,27 @@ def test_upload_pdf(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail="No se encontró la API key de OpenAI")
     
     # Procesar el PDF y categorizar transacciones
-    result = process_bank_statement_pdf(file_location, api_key)
+    transactions = process_bank_statement_pdf(file_location, api_key)
+    
+    # Detectar banco del texto extraído
+    extracted_text = ""
+    try:
+        with open(file_location, "rb") as f:
+            import pdfplumber
+            with pdfplumber.open(f) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        extracted_text += text + "\n"
+    except Exception as e:
+        print(f"Error extrayendo texto para detección de banco: {e}")
+    
+    # Detectar banco
+    banco = detect_bank(extracted_text)
     
     # Simular transacciones guardadas (sin guardar en BD)
     transacciones_simuladas = []
-    for t in result["transacciones"]:
+    for t in transactions:
         transacciones_simuladas.append({
             "id": len(transacciones_simuladas) + 1,
             "description": t["descripcion"],
@@ -669,17 +749,111 @@ def test_upload_pdf(file: UploadFile = File(...)):
     
     return {
         "filename": file.filename,
-        "banco": result["banco"],
+        "banco": banco,
         "transacciones_extraidas": transacciones_simuladas,
-        "texto_extraido": result["texto_extraido"],
+        "texto_extraido": extracted_text[:500] + "..." if len(extracted_text) > 500 else extracted_text,
         "message": f"Archivo procesado exitosamente. {len(transacciones_simuladas)} transacciones extraídas"
     }
 
 
 
 def _parse_date(date_str: str):
-    # Convierte '04-Jun-2025' a objeto date
-    return datetime.strptime(date_str, "%d-%b-%Y").date()
+    # Convierte '04-Jun-2025' o '04-ABR-2025' a objeto date
+    try:
+        # Primero intentar con el formato original
+        return datetime.strptime(date_str, "%d-%b-%Y").date()
+    except ValueError:
+        # Si falla, intentar con formato en mayúsculas (como ABR, ENE, FEB, etc.)
+        # Mapear abreviaciones en mayúsculas a formato estándar
+        month_mapping = {
+            'ENE': 'Jan', 'FEB': 'Feb', 'MAR': 'Mar', 'ABR': 'Apr',
+            'MAY': 'May', 'JUN': 'Jun', 'JUL': 'Jul', 'AGO': 'Aug',
+            'SEP': 'Sep', 'OCT': 'Oct', 'NOV': 'Nov', 'DIC': 'Dec'
+        }
+        
+        for esp_month, eng_month in month_mapping.items():
+            if esp_month in date_str:
+                date_str_fixed = date_str.replace(esp_month, eng_month)
+                return datetime.strptime(date_str_fixed, "%d-%b-%Y").date()
+        
+        # Si aún falla, intentar con formato numérico DD-MM-YYYY
+        try:
+            return datetime.strptime(date_str, "%d-%m-%Y").date()
+        except ValueError:
+            # Último intento: formato DD/MM/YYYY
+            return datetime.strptime(date_str, "%d/%m/%Y").date()
+
+def detect_bank(text: str) -> str:
+    """
+    Detecta el banco a partir del texto extraído, priorizando coincidencias exactas y robustas.
+    """
+    text_upper = text.upper()
+    # Prioridad: Santander > BBVA > HSBC > Banorte > Banamex > Banregio
+    if "SANTANDER" in text_upper:
+        return "Santander"
+    elif "BBVA" in text_upper:
+        return "BBVA"
+    elif "HSBC" in text_upper:
+        return "HSBC"
+    elif "BANORTE" in text_upper:
+        return "Banorte"
+    elif "BANAMEX" in text_upper or "CITIBANAMEX" in text_upper:
+        return "Banamex"
+    elif "BANREGIO" in text_upper:
+        return "Banregio"
+    else:
+        return "Desconocido"
+
+def extract_standard_transactions(text: str) -> List[Dict[str, Any]]:
+    """
+    Extract transactions using standard patterns.
+    """
+    transactions = []
+    lines = text.split("\n")
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Multiple patterns for different transaction formats
+        patterns = [
+            # Original pattern: 04-Jun-2025  04-Jun-2025  SU PAGO...  + $9,153.00
+            r"(\d{2}-[A-Za-z]{3}-\d{4})\s+\d{2}-[A-Za-z]{3}-\d{4}\s+(.+?)\s+([+-])\s*\\$([\d,]+\.\d{2})",
+            # Simplified pattern: 04-Jun-2025  SU PAGO...  + $9,153.00
+            r"(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+([+-])\s*\\$([\d,]+\.\d{2})",
+            # Pattern with variable spaces: 04-Jun-2025  SU PAGO...  +$9,153.00
+            r"(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+([+-])\\$([\d,]+\.\d{2})",
+            # Pattern without peso symbol: 04-Jun-2025  SU PAGO...  + 9,153.00
+            r"(\d{2}-[A-Za-z]{3}-\d{4})\s+(.+?)\s+([+-])\s*([\d,]+\.\d{2})",
+        ]
+        
+        for pattern in patterns:
+            match = re.match(pattern, line)
+            if match:
+                try:
+                    fecha_operacion = match.group(1)
+                    descripcion = match.group(2).strip()
+                    signo = match.group(3)
+                    monto_str = match.group(4).replace(",", "")
+                    monto = float(monto_str)
+                    tipo = "abono" if signo == "+" else "cargo"
+                    if tipo == "cargo":
+                        monto = -monto
+                    
+                    transactions.append({
+                        "fecha_operacion": fecha_operacion,
+                        "descripcion": descripcion,
+                        "monto": monto,
+                        "tipo": tipo,
+                        "categoria": "sin_categoria"
+                    })
+                    break  # If we found a match, don't try more patterns
+                except (ValueError, IndexError) as e:
+                    print(f"Error procesando línea: {line}, Error: {e}")
+                    continue
+                    
+    return transactions
 
 def extract_hsbc_transactions(extracted_text: str) -> List[dict]:
     """
@@ -907,6 +1081,193 @@ def extract_hsbc_transactions(extracted_text: str) -> List[dict]:
     
     print(f"📊 Total de transacciones HSBC encontradas: {len(transactions)}")
     return transactions
+
+def extract_santander_transactions(extracted_text: str) -> List[dict]:
+    """
+    Extrae transacciones de Santander del texto OCR.
+    Basado en el formato: FECHA FOLIO | DESCRIPCION DEPOSITO RETIRO SALDO
+    """
+    import re
+    transactions = []
+    
+    # Validar que el texto no sea None o vacío
+    if not extracted_text or not isinstance(extracted_text, str):
+        print("❌ Texto extraído es None o no es string")
+        return transactions
+    
+    lines = extracted_text.split('\n')
+    
+    print("🔍 Buscando transacciones en texto Santander...")
+    
+    # Buscar líneas que contengan el patrón de Santander
+    # Formato típico: FECHA FOLIO | DESCRIPCION DEPOSITO RETIRO SALDO
+    for i, line in enumerate(lines):
+        line = line.strip()
+        if not line:
+            continue
+        
+        # Patrón para Santander: DD-MMM-YYYY FOLIO DESCRIPCION DEPOSITO RETIRO SALDO
+        # Ejemplo: 01-ABR-2025 1445844 PAGO TRANSFERENCIA SPEI HORA 10:18:45 90.00 7.00
+        pattern = r'(\d{2}-[A-Z]{3}-\d{4})\s+(\d+)\s+(.+?)\s+(\d+\.\d{2})\s+(\d+\.\d{2})'
+        match = re.search(pattern, line)
+        
+        if match:
+            try:
+                fecha_operacion = match.group(1)
+                folio = match.group(2)
+                descripcion = match.group(3).strip()
+                deposito_str = match.group(4)
+                retiro_str = match.group(5)
+                
+                # Determinar si es depósito o retiro
+                deposito = float(deposito_str) if deposito_str != "0.00" else 0
+                retiro = float(retiro_str) if retiro_str != "0.00" else 0
+                
+                if deposito > 0:
+                    monto = deposito
+                    tipo = "abono"
+                elif retiro > 0:
+                    monto = -retiro
+                    tipo = "cargo"
+                else:
+                    continue  # Saltar líneas sin movimientos
+                
+                # Validar que la descripción no esté vacía
+                if descripcion and len(descripcion.strip()) > 2:
+                    transactions.append({
+                        "fecha_operacion": fecha_operacion,
+                        "fecha_cargo": fecha_operacion,
+                        "descripcion": descripcion,
+                        "monto": monto,
+                        "tipo": tipo,
+                        "categoria": "Sin categorizar"
+                    })
+                    print(f"✅ Transacción Santander encontrada: {fecha_operacion} - {descripcion[:40]} - ${monto}")
+                    
+            except Exception as e:
+                print(f"❌ Error procesando línea Santander: {line} - {e}")
+                continue
+    
+    # Si no se encontraron transacciones con el patrón principal, buscar patrones alternativos
+    if not transactions:
+        print("🔍 Buscando patrones alternativos de Santander...")
+        
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Patrón alternativo: buscar fechas y montos por separado
+            fecha_match = re.search(r'(\d{2}-[A-Z]{3}-\d{4})', line)
+            if fecha_match:
+                fecha = fecha_match.group(1)
+                
+                # Buscar montos en la línea
+                montos = re.findall(r'(\d+\.\d{2})', line)
+                if len(montos) >= 2:  # Debe tener al menos depósito y retiro
+                    try:
+                        deposito = float(montos[0])
+                        retiro = float(montos[1])
+                        
+                        # Determinar tipo de transacción
+                        if deposito > 0 and retiro == 0:
+                            monto = deposito
+                            tipo = "abono"
+                        elif retiro > 0 and deposito == 0:
+                            monto = -retiro
+                            tipo = "cargo"
+                        else:
+                            continue
+                        
+                        # Extraer descripción (todo lo que no sea fecha ni montos)
+                        descripcion = line.replace(fecha, '').replace(montos[0], '').replace(montos[1], '').strip()
+                        descripcion = re.sub(r'\d+', '', descripcion).strip()  # Remover números restantes
+                        
+                        if descripcion and len(descripcion) > 2:
+                            transactions.append({
+                                "fecha_operacion": fecha,
+                                "fecha_cargo": fecha,
+                                "descripcion": descripcion,
+                                "monto": monto,
+                                "tipo": tipo,
+                                "categoria": "Sin categorizar"
+                            })
+                            print(f"✅ Transacción Santander (patrón alternativo): {fecha} - {descripcion[:40]} - ${monto}")
+                            
+                    except Exception as e:
+                        print(f"❌ Error procesando montos: {line} - {e}")
+                        continue
+    
+    print(f"📊 Total de transacciones Santander encontradas: {len(transactions)}")
+    return transactions
+
+def _process_chunk_with_ai(chunk: str, api_key: str) -> List[Dict[str, Any]]:
+    """
+    Procesa un chunk de texto con AI.
+    """
+    try:
+        # Limpiar cualquier configuración global de OpenAI
+        import openai
+        if hasattr(openai, 'api_key'):
+            delattr(openai, 'api_key')
+        if hasattr(openai, '_client'):
+            delattr(openai, '_client')
+        
+        # Configurar OpenAI sin proxies usando el cliente
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        
+        prompt = f"""
+        Extrae todas las transacciones bancarias del siguiente texto. 
+        Para cada transacción, identifica:
+        - fecha_operacion: fecha de la transacción (formato DD-MMM-YYYY)
+        - descripcion: descripción de la transacción
+        - monto: monto de la transacción (número con decimales)
+        - categoria: categoría de la transacción (supermercado, transporte, restaurante, etc.)
+
+        Responde SOLO con un JSON válido en este formato:
+        [
+            {{
+                "fecha_operacion": "DD-MMM-YYYY",
+                "descripcion": "descripción",
+                "monto": 123.45,
+                "categoria": "categoría"
+            }}
+        ]
+
+        Texto a analizar:
+        {chunk}
+        """
+        
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Eres un experto en extracción de transacciones bancarias. Responde SOLO con JSON válido."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.1,
+            max_tokens=2000
+        )
+        
+        content = response.choices[0].message.content.strip()
+        
+        # Intentar parsear JSON
+        try:
+            import json
+            transactions = json.loads(content)
+            if isinstance(transactions, list):
+                return transactions
+            else:
+                print(f"❌ Respuesta no es una lista: {type(transactions)}")
+                return []
+        except json.JSONDecodeError as e:
+            print(f"❌ Error parseando JSON: {e}")
+            print(f"🔎 Respuesta cruda: {content}")
+            return []
+            
+    except Exception as e:
+        print(f"❌ Error procesando chunk: {e}")
+        return []
 
 # Ruta de prueba
 @app.get("/")

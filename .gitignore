@@ -71,6 +71,11 @@ Thumbs.db
 # Logs
 logs
 *.log
+nohup.out
+
+# Uploaded PDFs and OCR files
+backend/uploaded_pdfs/*.pdf
+backend/uploaded_pdfs/*.ocr.txt
 
 # Runtime data
 pids

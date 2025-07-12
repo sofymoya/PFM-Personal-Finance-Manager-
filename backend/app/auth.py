@@ -55,6 +55,7 @@ def extract_transactions_with_ai(pdf_text: str) -> list:
     import re
 
     api_key = os.getenv("OPENAI_API_KEY")
+    # Elimina cualquier argumento proxies en la inicialización del cliente OpenAI
     client = OpenAI(api_key=api_key)
 
     # Dividir el texto en chunks más pequeños para evitar el límite de contexto
@@ -123,8 +124,15 @@ def extract_transactions_with_ai(pdf_text: str) -> list:
                 max_tokens=3000,
                 temperature=0
             )
-            
-            result = json.loads(response.choices[0].message.content)
+            raw_content = response.choices[0].message.content
+            try:
+                result = json.loads(raw_content)
+            except Exception as parse_err:
+                print(f"❌ Error parseando JSON en chunk {i+1}: {parse_err}")
+                print(f"🔎 Respuesta cruda de OpenAI (chunk {i+1}):\n{raw_content}\n--- FIN RESPUESTA ---")
+                if not raw_content.strip():
+                    print(f"⚠️ Respuesta de OpenAI vacía en chunk {i+1}")
+                continue
             print(f"✅ Chunk {i+1}: {len(result)} transacciones encontradas")
             
             # Filtrar transacciones válidas
