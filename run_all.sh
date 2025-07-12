@@ -1,43 +1,67 @@
 #!/bin/bash
 
-# Script para levantar backend y frontend en paralelo
-# Uso: bash run_all.sh
+echo "🚀 Iniciando PFM - Personal Finance Manager"
+echo "=========================================="
 
-set -e
+# Función para limpiar procesos al salir
+cleanup() {
+    echo "🛑 Deteniendo todos los procesos..."
+    pkill -f "uvicorn" 2>/dev/null
+    pkill -f "vite" 2>/dev/null
+    exit 0
+}
 
-# Ruta absoluta del proyecto
-ROOT_DIR="$(cd "$(dirname "$0")"; pwd)"
+# Capturar Ctrl+C
+trap cleanup SIGINT
 
-# Función para levantar el backend
-run_backend() {
-  echo "\n🚀 Levantando backend..."
-  cd "$ROOT_DIR/backend"
-  # Detectar entorno virtual
-  if [ -d "venv" ]; then
-    source venv/bin/activate
-  elif [ -d ".venv" ]; then
-    source .venv/bin/activate
-  else
-    echo "❌ No se encontró entorno virtual en backend. Ejecuta 'python3 -m venv venv' y 'pip install -r requirements.txt' primero."
+# Verificar si estamos en el directorio correcto
+if [ ! -d "backend" ] || [ ! -d "frontend" ]; then
+    echo "❌ Error: Debes ejecutar este script desde el directorio raíz del proyecto"
     exit 1
-  fi
-  exec python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-}
+fi
 
-# Función para levantar el frontend
-run_frontend() {
-  echo "\n🚀 Levantando frontend..."
-  cd "$ROOT_DIR/frontend"
-  if [ ! -d "node_modules" ]; then
-    echo "Instalando dependencias de frontend..."
-    npm install
-  fi
-  exec npm run dev
-}
+# Iniciar backend
+echo "🔧 Iniciando backend..."
+cd backend
+source venv/bin/activate
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
+BACKEND_PID=$!
+cd ..
 
-# Lanzar ambos en paralelo con logs separados
-(run_backend 2>&1 | sed 's/^/[BACKEND] /') &
-(run_frontend 2>&1 | sed 's/^/[FRONTEND] /') &
+# Esperar un momento para que el backend se inicie
+sleep 3
 
-# Esperar a que ambos terminen
+# Verificar que el backend esté funcionando
+if curl -s http://localhost:8000/ > /dev/null; then
+    echo "✅ Backend iniciado correctamente en http://localhost:8000"
+else
+    echo "❌ Error: El backend no se pudo iniciar"
+    exit 1
+fi
+
+# Iniciar frontend
+echo "🎨 Iniciando frontend..."
+cd frontend
+npm run dev &
+FRONTEND_PID=$!
+cd ..
+
+# Esperar un momento para que el frontend se inicie
+sleep 5
+
+# Verificar que el frontend esté funcionando
+if curl -s http://localhost:5173/ > /dev/null 2>&1 || curl -s http://localhost:5174/ > /dev/null 2>&1 || curl -s http://localhost:5175/ > /dev/null 2>&1; then
+    echo "✅ Frontend iniciado correctamente"
+else
+    echo "⚠️ Frontend puede estar iniciándose..."
+fi
+
+echo ""
+echo "🎉 ¡PFM está listo!"
+echo "📊 Backend: http://localhost:8000"
+echo "🌐 Frontend: http://localhost:5173 (o 5174, 5175)"
+echo ""
+echo "Presiona Ctrl+C para detener todos los servicios"
+
+# Mantener el script ejecutándose
 wait 

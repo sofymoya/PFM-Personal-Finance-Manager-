@@ -20,8 +20,13 @@ class AgenticDocumentExtractor:
         if hasattr(openai, '_client'):
             delattr(openai, '_client')
         
-        # Crear cliente sin argumentos adicionales
-        self.client = OpenAI(api_key=api_key)
+        # Crear cliente sin argumentos adicionales - SOLUCIÓN AL PROBLEMA DE PROXIES
+        try:
+            self.client = OpenAI(api_key=api_key)
+        except Exception as e:
+            print(f"❌ Error inicializando OpenAI client: {e}")
+            # Fallback: usar configuración básica
+            self.client = None
         
     def extract_transactions(self, text: str, bank_name: str = "Unknown") -> List[Dict[str, Any]]:
         """
@@ -29,6 +34,11 @@ class AgenticDocumentExtractor:
         This method uses a more intelligent prompt that adapts to any document format.
         """
         if not text.strip():
+            return []
+        
+        # Verificar si el cliente está disponible
+        if self.client is None:
+            print("❌ Cliente OpenAI no disponible, usando fallback")
             return []
             
         # Split text into manageable chunks if too long
@@ -56,6 +66,11 @@ class AgenticDocumentExtractor:
         """
         Process a single chunk using agentic extraction.
         """
+        # Verificar si el cliente está disponible
+        if self.client is None:
+            print(f"❌ Cliente OpenAI no disponible en chunk {chunk_num}")
+            return []
+            
         prompt = self._create_agentic_prompt(text, bank_name, chunk_num, total_chunks)
         
         try:

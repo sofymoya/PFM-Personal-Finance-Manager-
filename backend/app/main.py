@@ -706,21 +706,35 @@ def upload_pdf(file: UploadFile = File(...), current_user: models.User = Depends
             print(f"❌ Transacción no es un diccionario: {type(t)} - {t}")
             continue
             
-        # Validar campos requeridos
-        if not all(key in t for key in ['descripcion', 'monto', 'fecha_operacion', 'categoria']):
-            print(f"❌ Transacción faltan campos requeridos: {t}")
-            continue
-            
-        # Mapear campos al esquema TransactionCreate
+        # Validar campos requeridos con mejor manejo de errores
         try:
+            descripcion = t.get("descripcion", "")
+            monto = t.get("monto", 0)
+            fecha_operacion = t.get("fecha_operacion", "")
+            categoria = t.get("categoria", "Sin categorizar")
+            
+            # Validar que los campos no estén vacíos
+            if not descripcion or not fecha_operacion:
+                print(f"❌ Transacción faltan campos requeridos: {t}")
+                continue
+                
+            # Parsear fecha
+            parsed_date = _parse_date(fecha_operacion)
+            if parsed_date is None:
+                print(f"❌ No se pudo parsear la fecha: {fecha_operacion}")
+                continue
+                
+            # Mapear campos al esquema TransactionCreate
             transaction_data = schemas.TransactionCreate(
-                description=t["descripcion"],
-                amount=t["monto"],
-                date=_parse_date(t["fecha_operacion"]),
-                category=t["categoria"]
+                description=descripcion,
+                amount=monto,
+                date=parsed_date,
+                category=categoria
             )
             db_transaction = crud.create_transaction(db=db, transaction=transaction_data, user_id=current_user.id)
             transacciones_guardadas.append(db_transaction)
+            print(f"✅ Transacción guardada: {descripcion[:30]}... - ${monto}")
+            
         except Exception as e:
             print(f"Error guardando transacción: {e}")
             print(f"Transacción problemática: {t}")
@@ -790,6 +804,11 @@ def test_upload_pdf(file: UploadFile = File(...)):
 
 def _parse_date(date_str: str):
     # Convierte '04-Jun-2025' o '04-ABR-2025' a objeto date
+    if not date_str or not isinstance(date_str, str):
+        return None
+        
+    date_str = date_str.strip()
+    
     try:
         # Primero intentar con el formato original
         return datetime.strptime(date_str, "%d-%b-%Y").date()
@@ -802,17 +821,29 @@ def _parse_date(date_str: str):
             'SEP': 'Sep', 'OCT': 'Oct', 'NOV': 'Nov', 'DIC': 'Dec'
         }
         
+        # Buscar y reemplazar meses en español
         for esp_month, eng_month in month_mapping.items():
-            if esp_month in date_str:
-                date_str_fixed = date_str.replace(esp_month, eng_month)
-                return datetime.strptime(date_str_fixed, "%d-%b-%Y").date()
+            if esp_month in date_str.upper():
+                date_str_fixed = date_str.upper().replace(esp_month, eng_month)
+                try:
+                    return datetime.strptime(date_str_fixed, "%d-%b-%Y").date()
+                except ValueError:
+                    continue
         
         # Si aún falla, intentar con formato numérico DD-MM-YYYY
         try:
             return datetime.strptime(date_str, "%d-%m-%Y").date()
         except ValueError:
             # Último intento: formato DD/MM/YYYY
-            return datetime.strptime(date_str, "%d/%m/%Y").date()
+            try:
+                return datetime.strptime(date_str, "%d/%m/%Y").date()
+            except ValueError:
+                # Si todo falla, intentar con formato YYYY-MM-DD
+                try:
+                    return datetime.strptime(date_str, "%Y-%m-%d").date()
+                except ValueError:
+                    print(f"❌ No se pudo parsear la fecha: {date_str}")
+                    return None
 
 def detect_bank(text: str) -> str:
     """
