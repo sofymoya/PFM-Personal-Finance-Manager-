@@ -1,113 +1,143 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { authAPI } from '../services/api';
+import { Link } from 'react-router-dom';
+import vector0 from '../assets/vector-0.svg';
 
-const Register: React.FC = () => {
+interface RegisterProps {
+  onRegister: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+}
+
+const Register: React.FC<RegisterProps> = ({ onRegister }) => {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-
-    try {
-      await authAPI.register({ email, password, name });
-      // Redirigir al login después del registro exitoso
-      navigate('/login');
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Error al registrarse');
-    } finally {
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
       setLoading(false);
+      return;
     }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      setLoading(false);
+      return;
+    }
+    const result = await onRegister(name, email, password);
+    if (!result.success) {
+      setError(result.error || 'Error signing up');
+    }
+    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Crear cuenta
-          </h2>
+    <div className="flex flex-col items-start relative bg-white min-h-screen">
+      <div className="flex flex-col min-h-[800px] items-start relative self-stretch w-full flex-[0_0_auto] bg-white">
+        <div className="flex flex-col items-start relative self-stretch w-full flex-[0_0_auto]">
+          <div className="items-center justify-around px-10 py-3 flex-[0_0_auto] border-b border-[#e5e8ea] flex relative self-stretch w-full">
+            <div className="inline-flex items-center gap-4 relative flex-[0_0_auto]">
+              <div className="inline-flex flex-col items-start relative flex-[0_0_auto]">
+                <div className="w-4 relative flex-1 grow">
+                  <img className="absolute w-[13px] h-[13px] top-px left-px" alt="Vector" src={vector0} />
+                </div>
+              </div>
+              <div className="inline-flex flex-col items-start relative flex-[0_0_auto]">
+                <div className="relative self-stretch mt-[-1.00px] font-bold text-[#111416] text-lg tracking-[0] leading-[23px] whitespace-nowrap">
+                  FinTrack
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="items-start justify-center px-4 md:px-40 py-5 flex-1 grow flex relative self-stretch w-full">
+            <div className="flex flex-col max-w-md w-full items-center px-0 py-5 relative flex-[0_0_auto] mb-[-1.00px] mx-auto">
+              <div className="flex flex-col items-center pt-5 pb-3 px-4 self-stretch w-full relative flex-[0_0_auto]">
+                <div className="relative self-stretch mt-[-1.00px] font-bold text-[#111416] text-[28px] text-center tracking-[0] leading-[35px]">
+                  Create your account
+                </div>
+              </div>
+              {error && (
+                <div className="flex max-w-[480px] items-center justify-center gap-2.5 px-4 py-3 relative w-full">
+                  <div className="flex flex-col w-full items-start relative">
+                    <div className="flex items-center p-4 relative self-stretch w-full bg-red-50 border border-red-200 rounded-xl">
+                      <div className="relative w-fit font-normal text-red-600 text-sm">
+                        {error}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <form onSubmit={handleSubmit} className="w-full max-w-md flex flex-col gap-4">
+                <div className="flex flex-col w-full">
+                  <label className="font-medium text-[#111416] text-base mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
+                    className="h-14 p-[15px] bg-white rounded-xl border border-solid border-[#dde0e2] w-full font-normal text-[#111416] text-base placeholder:text-[#667782]"
+                    placeholder="Enter your full name"
+                  />
+                </div>
+                <div className="flex flex-col w-full">
+                  <label className="font-medium text-[#111416] text-base mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    className="h-14 p-[15px] bg-white rounded-xl border border-solid border-[#dde0e2] w-full font-normal text-[#111416] text-base placeholder:text-[#667782]"
+                    placeholder="Enter your email"
+                  />
+                </div>
+                <div className="flex flex-col w-full">
+                  <label className="font-medium text-[#111416] text-base mb-1">Password</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="h-14 p-[15px] bg-white rounded-xl border border-solid border-[#dde0e2] w-full font-normal text-[#111416] text-base placeholder:text-[#667782]"
+                    placeholder="Enter your password"
+                  />
+                </div>
+                <div className="flex flex-col w-full">
+                  <label className="font-medium text-[#111416] text-base mb-1">Confirm Password</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    className="h-14 p-[15px] bg-white rounded-xl border border-solid border-[#dde0e2] w-full font-normal text-[#111416] text-base placeholder:text-[#667782]"
+                    placeholder="Confirm your password"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full h-10 items-center justify-center px-4 py-0 bg-[#338ec9] rounded-[20px] text-white font-bold text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#256fa1] transition-colors mt-2"
+                >
+                  {loading ? 'Signing up...' : 'Sign Up'}
+                </button>
+              </form>
+              <div className="flex flex-col items-center pt-1 pb-3 px-4 self-stretch w-full relative flex-[0_0_auto]">
+                <div className="relative self-stretch mt-[-1.00px] font-normal text-[#667782] text-sm text-center tracking-[0] leading-[21px]">
+                  Already have an account?
+                </div>
+              </div>
+              <div className="flex flex-col items-center pt-1 pb-3 px-4 self-stretch w-full relative flex-[0_0_auto]">
+                <Link to="/login" className="relative self-stretch mt-[-1.00px] font-normal text-[#667782] text-sm text-center tracking-[0] leading-[21px] hover:text-[#338ec9] transition-colors">
+                  Log In
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="name" className="sr-only">
-                Nombre
-              </label>
-              <input
-                id="name"
-                name="name"
-                type="text"
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Nombre (opcional)"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="email" className="sr-only">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">
-                Contraseña
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {error && (
-            <div className="text-red-600 text-sm text-center">{error}</div>
-          )}
-
-          <div>
-            <button
-              type="submit"
-              disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {loading ? 'Cargando...' : 'Registrarse'}
-            </button>
-          </div>
-
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              ¿Ya tienes cuenta?{' '}
-              <Link
-                to="/login"
-                className="font-medium text-indigo-600 hover:text-indigo-500"
-              >
-                Inicia sesión aquí
-              </Link>
-            </p>
-          </div>
-        </form>
       </div>
     </div>
   );
