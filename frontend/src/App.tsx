@@ -1,66 +1,63 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import type { ReactNode } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
-import UploadPDF from './pages/UploadPDF';
 import Transactions from './pages/Transactions';
+import UploadPDF from './pages/UploadPDF';
 import TestDesign from './pages/TestDesign';
 import SimpleTest from './pages/SimpleTest';
 import { authApi } from './auth/authApi';
 
 interface User {
-  id: number;
-  username: string;
-  email: string;
-  name: string;
+  id?: number;
+  username?: string;
+  email?: string;
+  name?: string;
 }
 
-function App() {
+type AppProps = {
+  routerComponent?: React.ComponentType<{ children: ReactNode }>;
+};
+
+function App({ routerComponent: RouterComponent = BrowserRouter }: AppProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
-      authApi.verifyToken()
-        .then((userData: any) => {
-          setUser({
-            id: userData.id || 1,
-            username: userData.username || userData.email,
-            email: userData.email,
-            name: userData.name || userData.username || 'Usuario'
-          });
-        })
-        .catch(() => {
-          localStorage.removeItem('token');
-        })
-        .finally(() => {
-          setLoading(false);
+      try {
+        // Decodificar el token JWT para obtener información básica
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setUser({
+          name: payload.name || payload.email?.split('@')[0] || 'Usuario',
+          email: payload.email || 'usuario@example.com',
         });
+      } catch (e) {
+        localStorage.removeItem('token');
+        setUser(null);
+      }
     } else {
-      setLoading(false);
+      setUser(null);
     }
+    setLoading(false);
   }, []);
 
+  // handleLogin debe coincidir con la firma esperada por Login
   const handleLogin = async (email: string, password: string) => {
     try {
-      const response: any = await authApi.login(email, password);
-      if (response.token || response.access_token) {
-        const token = response.token || response.access_token;
-        localStorage.setItem('token', token);
-        setUser({ 
-          id: 1, 
-          username: email, 
-          email,
-          name: email.split('@')[0] // Usar parte del email como nombre
-        });
+      const response = await authApi.login(email, password);
+      if (response.token) {
+        localStorage.setItem('token', response.token);
+        setUser(response.user);
         return { success: true };
       }
       return { success: false, error: 'Credenciales inválidas' };
-    } catch (error) {
-      return { success: false, error: 'Error al iniciar sesión' };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Error al iniciar sesión' };
     }
   };
 
@@ -80,51 +77,112 @@ function App() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
     setUser(null);
+    localStorage.removeItem('token');
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando...</p>
-        </div>
-      </div>
-    );
+    return <div className="flex items-center justify-center h-screen">Cargando...</div>;
   }
 
   return (
-    <Router>
-      <div className="App">
-        {user ? (
-          // Rutas autenticadas con Layout
-          <Layout user={user} onLogout={handleLogout}>
-            <Routes>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/transactions" element={<Transactions />} />
-              <Route path="/upload" element={<UploadPDF />} />
-              <Route path="/reports" element={<div className="p-6"><h1 className="text-2xl font-bold">Reportes</h1><p className="text-gray-600">Página de reportes en desarrollo...</p></div>} />
-              <Route path="/test-design" element={<TestDesign />} />
-              <Route path="/simple-test" element={<SimpleTest />} />
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            </Routes>
-          </Layout>
-        ) : (
-          // Rutas públicas sin Layout
-          <Routes>
-            <Route path="/login" element={<Login onLogin={handleLogin} />} />
-            <Route path="/register" element={<Register onRegister={handleRegister} />} />
-            <Route path="/test-design" element={<TestDesign />} />
-            <Route path="/simple-test" element={<SimpleTest />} />
-            <Route path="/" element={<Navigate to="/login" replace />} />
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
-        )}
-      </div>
-    </Router>
+    <RouterComponent>
+      <AppRoutes user={user} setUser={setUser} loading={loading} />
+    </RouterComponent>
   );
+}
+
+function AppRoutes({ user, setUser, loading }: { user: any, setUser: any, loading: boolean }) {
+  const navigate = useNavigate();
+
+  // handleLogin debe coincidir con la firma esperada por Login
+  const handleLogin = async (email: string, password: string) => {
+    try {
+      const response = await authApi.login(email, password);
+      if (response.token) {
+        localStorage.setItem('token', response.token);
+        setUser(response.user);
+        navigate('/dashboard');
+        return { success: true };
+      }
+      return { success: false, error: 'Credenciales inválidas' };
+    } catch (error: any) {
+      return { success: false, error: error.message || 'Error al iniciar sesión' };
+    }
+  };
+
+  const handleRegister = async (name: string, email: string, password: string) => {
+    try {
+      const response: any = await authApi.register(name, email, password);
+      if (response.token || response.access_token) {
+        const token = response.token || response.access_token;
+        localStorage.setItem('token', token);
+        setUser({ id: 1, username: name, email, name });
+        return { success: true };
+      }
+      return { success: false, error: 'Error al registrarse' };
+    } catch (error) {
+      return { success: false, error: 'Error al registrarse' };
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('token');
+    navigate('/login');
+  };
+
+  if (loading) {
+    return <div className="flex items-center justify-center h-screen">Cargando...</div>;
+  }
+
+  return (
+    <Routes>
+      {/* Rutas públicas */}
+      <Route path="/login" element={
+        <ErrorBoundary fallback={<div className="text-red-500 p-8 text-center">Ocurrió un error al cargar la pantalla de login.</div>}>
+          <Login onLogin={handleLogin} />
+        </ErrorBoundary>
+      } />
+      <Route path="/register" element={<Register onRegister={handleRegister} />} />
+      {/* Redirección explícita para la raíz */}
+      <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} replace />} />
+      {/* Rutas privadas */}
+      {user ? (
+        <>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/transactions" element={<Transactions />} />
+          <Route path="/upload-pdf" element={<UploadPDF />} />
+          <Route path="/reports" element={<div className="p-6"><h1 className="text-2xl font-bold">Reportes</h1><p className="text-gray-600">Página de reportes en desarrollo...</p></div>} />
+          <Route path="/test-design" element={<TestDesign />} />
+          <Route path="/simple-test" element={<SimpleTest />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </>
+      ) : (
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      )}
+    </Routes>
+  );
+}
+
+// ErrorBoundary para capturar errores de renderizado
+class ErrorBoundary extends React.Component<{ fallback: ReactNode, children: ReactNode }, { hasError: boolean }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: any, errorInfo: any) {
+    // Puedes loguear el error aquí si quieres
+  }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+    return this.props.children;
+  }
 }
 
 export default App;

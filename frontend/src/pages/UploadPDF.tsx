@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from 'react';
-import { Card, CardHeader, CardBody } from '../components/ui/Card';
-import Button from '../components/ui/Button';
-import Input from '../components/ui/Input';
+import React, { useState, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import image from "../assets/image.svg";
+import vector0 from "../assets/vector-0.svg";
+import { formatPesos } from '../utils/formatters';
 
 interface Transaction {
   fecha_operacion: string;
@@ -12,7 +13,8 @@ interface Transaction {
   banco: string;
 }
 
-const UploadPDF: React.FC = () => {
+export const UploadBank = () => {
+  const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -22,6 +24,13 @@ const UploadPDF: React.FC = () => {
     message: string;
     transactionsCount?: number;
   } | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null); // <-- NUEVO
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    navigate('/login');
+  };
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -42,6 +51,10 @@ const UploadPDF: React.FC = () => {
     
     if (pdfFile) {
       setFile(pdfFile);
+      setFileError(null);
+    } else {
+      setFile(null);
+      setFileError('Solo se permiten archivos PDF.');
     }
   }, []);
 
@@ -49,7 +62,15 @@ const UploadPDF: React.FC = () => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile && selectedFile.type === 'application/pdf') {
       setFile(selectedFile);
+      setFileError(null);
+    } else if (selectedFile) {
+      setFile(null);
+      setFileError('Solo se permiten archivos PDF.');
     }
+  };
+
+  const handleSelectFileClick = () => {
+    fileInputRef.current?.click();
   };
 
   const handleUpload = async () => {
@@ -75,12 +96,32 @@ const UploadPDF: React.FC = () => {
       const result = await response.json();
 
       if (response.ok) {
-        setUploadResult({
-          success: true,
-          message: `PDF procesado exitosamente. Se encontraron ${result.transactions?.length || 0} transacciones.`,
-          transactionsCount: result.transactions?.length || 0
-        });
-        setTransactions(result.transactions || []);
+        // Mapeo defensivo para manejar diferentes nombres de campos del backend
+        // El backend devuelve las transacciones en 'transacciones_guardadas'
+        const backendTransactions = result.transacciones_guardadas || result.transactions || [];
+        
+        const txs = backendTransactions.map((t: any) => ({
+          fecha_operacion: t.fecha_operacion || t.fecha || t.date || t.fecha_transaccion || '',
+          descripcion: t.descripcion || t.description || t.desc || t.concepto || '',
+          monto: t.monto ?? t.amount ?? t.importe ?? t.valor ?? 0,
+          tipo: t.tipo || t.type || t.nature || '',
+          categoria: t.categoria || t.category || t.cat || '',
+          banco: t.banco || t.bank || t.entidad || '',
+        }));
+        
+        if (txs.length === 0) {
+          setUploadResult({
+            success: false,
+            message: 'No se encontraron transacciones en tu PDF. Intenta con otro archivo o revisa el estado de cuenta.'
+          });
+        } else {
+          setUploadResult({
+            success: true,
+            message: `PDF procesado exitosamente. Se encontraron ${txs.length} transacciones.`,
+            transactionsCount: txs.length
+          });
+        }
+        setTransactions(txs);
       } else {
         setUploadResult({
           success: false,
@@ -97,259 +138,287 @@ const UploadPDF: React.FC = () => {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN'
-    }).format(amount);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-MX');
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Cargar PDF</h1>
-          <p className="text-neutral-600">Sube tu estado de cuenta bancario para extraer transacciones</p>
-        </div>
-      </div>
-
-      {/* Upload Area */}
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold text-neutral-900">Seleccionar Archivo</h2>
-        </CardHeader>
-        <CardBody>
-          <div
-            className={`
-              border-2 border-dashed rounded-lg p-8 text-center transition-colors
-              ${isDragOver 
-                ? 'border-primary-400 bg-primary-50' 
-                : 'border-neutral-300 hover:border-neutral-400'
-              }
-              ${file ? 'border-success-400 bg-success-50' : ''}
-            `}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            {file ? (
-              <div className="space-y-4">
-                <div className="w-16 h-16 bg-success-100 rounded-full flex items-center justify-center mx-auto">
-                  <svg className="w-8 h-8 text-success-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-lg font-medium text-neutral-900">{file.name}</p>
-                  <p className="text-sm text-neutral-500">
-                    {(file.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setFile(null)}
-                >
-                  Cambiar archivo
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mx-auto">
-                  <svg className="w-8 h-8 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-lg font-medium text-neutral-900">
-                    Arrastra tu PDF aquí o haz clic para seleccionar
-                  </p>
-                  <p className="text-sm text-neutral-500">
-                    Solo archivos PDF de estados de cuenta bancarios
-                  </p>
-                </div>
-                                 <input
-                   type="file"
-                   accept=".pdf"
-                   onChange={handleFileSelect}
-                   className="hidden"
-                   id="file-input"
-                 />
-                 <label htmlFor="file-input">
-                   <Button variant="outline">
-                     Seleccionar archivo
-                   </Button>
-                 </label>
-              </div>
-            )}
+    <div className="flex flex-col items-start relative bg-white">
+      <div className="flex flex-col min-h-[800px] items-start relative self-stretch w-full flex-[0_0_auto] bg-white">
+        <div className="flex flex-col items-start relative self-stretch w-full flex-[0_0_auto]">
+          {/* Header with Navigation */}
+          <div className="w-full border-b border-[#e5e8ea] px-10 py-3 flex items-center justify-between">
+            <span className="font-bold text-lg text-[#111416]">FinTrack</span>
+            
+            {/* Navigation Buttons */}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors font-medium"
+              >
+                🏠 Dashboard
+              </button>
+              <button
+                onClick={() => navigate('/transactions')}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                📊 Transactions
+              </button>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+              >
+                🚪 Logout
+              </button>
+            </div>
           </div>
 
-          {file && (
-            <div className="mt-6">
-              <Button
-                onClick={handleUpload}
-                loading={uploading}
-                disabled={!file || uploading}
-                className="w-full"
-                size="lg"
-                icon={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                }
-              >
-                {uploading ? 'Procesando...' : 'Procesar PDF'}
-              </Button>
-            </div>
-          )}
-        </CardBody>
-      </Card>
-
-      {/* Upload Result */}
-      {uploadResult && (
-        <Card>
-          <CardBody>
-            <div className={`p-4 rounded-lg ${
-              uploadResult.success 
-                ? 'bg-success-50 border border-success-200' 
-                : 'bg-error-50 border border-error-200'
-            }`}>
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  uploadResult.success ? 'bg-success-100' : 'bg-error-100'
-                }`}>
-                  <svg className={`w-5 h-5 ${
-                    uploadResult.success ? 'text-success-600' : 'text-error-600'
-                  }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+          <div className="items-center justify-between px-10 py-3 flex-[0_0_auto] border-b [border-bottom-style:solid] border-[#e5e8ea] flex relative self-stretch w-full">
+            <div className="inline-flex items-center gap-4 relative flex-[0_0_auto]">
+              <div className="inline-flex flex-col items-start relative flex-[0_0_auto]">
+                <div className="relative flex-1 w-4 grow">
+                  <img
+                    className="absolute w-3 h-3 top-0.5 left-0.5"
+                    alt="Vector"
+                    src={vector0}
+                  />
                 </div>
-                <div>
-                  <p className={`font-medium ${
-                    uploadResult.success ? 'text-success-800' : 'text-error-800'
-                  }`}>
-                    {uploadResult.message}
-                  </p>
-                  {uploadResult.success && uploadResult.transactionsCount !== undefined && (
-                    <p className="text-sm text-success-600">
-                      {uploadResult.transactionsCount} transacciones extraídas
-                    </p>
+              </div>
+
+              <div className="inline-flex flex-col items-start relative flex-[0_0_auto]">
+                <div className="relative self-stretch mt-[-1.00px] font-bold text-[#111416] text-lg tracking-[0] leading-[23px] whitespace-nowrap">
+                  FinWise
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-start justify-end gap-8 relative flex-1 grow">
+              <div className="inline-flex items-center gap-9 flex-[0_0_auto] h-10 relative">
+                <div className="inline-flex flex-col items-start relative flex-[0_0_auto]">
+                  <div className="relative self-stretch mt-[-1.00px] font-medium text-[#111416] text-sm tracking-[0] leading-[21px] whitespace-nowrap">
+                    Overview
+                  </div>
+                </div>
+
+                <div className="inline-flex flex-col items-start relative flex-[0_0_auto]">
+                  <div className="relative self-stretch mt-[-1.00px] font-medium text-[#111416] text-sm tracking-[0] leading-[21px] whitespace-nowrap">
+                    Transactions
+                  </div>
+                </div>
+
+                <div className="inline-flex flex-col items-start relative flex-[0_0_auto]">
+                  <div className="relative self-stretch mt-[-1.00px] font-medium text-[#111416] text-sm tracking-[0] leading-[21px] whitespace-nowrap">
+                    Budgets
+                  </div>
+                </div>
+
+                <div className="inline-flex flex-col items-start relative flex-[0_0_auto]">
+                  <div className="relative self-stretch mt-[-1.00px] font-medium text-[#111416] text-sm tracking-[0] leading-[21px] whitespace-nowrap">
+                    Reports
+                  </div>
+                </div>
+              </div>
+
+              <div className="inline-flex max-w-[480px] items-center justify-center gap-2 px-2.5 py-0 flex-[0_0_auto] bg-[#eff2f4] rounded-[20px] overflow-hidden h-10 relative">
+                <div className="flex items-center flex-1 grow flex-col relative">
+                  <div className="relative flex-1 self-stretch w-full grow">
+                    <img
+                      className="absolute w-4 h-4 top-0.5 left-0.5"
+                      alt="Vector"
+                      src={image}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="w-10 rounded-[20px] bg-[#3B82F6] h-10 relative flex items-center justify-center text-white font-bold">
+                U
+              </div>
+            </div>
+          </div>
+
+          <div className="items-start justify-center px-40 py-5 flex-1 grow flex relative self-stretch w-full">
+            <div className="flex flex-col max-w-[960px] w-[960px] items-start px-0 py-5 relative">
+              <div className="flex flex-wrap items-start justify-around gap-[12px_12px] p-4 relative self-stretch w-full flex-[0_0_auto]">
+                <div className="inline-flex min-w-72 items-start flex-[0_0_auto] flex-col relative">
+                  <div className="relative self-stretch mt-[-1.00px] font-bold text-[#111416] text-[32px] tracking-[0] leading-10 whitespace-nowrap">
+                    Upload Bank Statement
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-start p-4 relative self-stretch w-full flex-[0_0_auto]">
+                <div 
+                  className={`flex items-center gap-6 px-6 py-14 self-stretch w-full flex-[0_0_auto] rounded-xl border-2 border-dashed flex-col relative transition-colors ${
+                    isDragOver 
+                      ? 'border-blue-400 bg-blue-50' 
+                      : file 
+                        ? 'border-green-400 bg-green-50'
+                        : 'border-[#dbe0e5] hover:border-gray-400'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  {file ? (
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                        <span className="text-2xl">✅</span>
+                      </div>
+                      <div className="text-center">
+                        <p className="font-bold text-[#111416] text-lg">
+                          {file.name}
+                        </p>
+                        <p className="text-[#637787] text-sm">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setFile(null)}
+                        className="min-w-[84px] h-10 items-center justify-center px-4 py-0 relative bg-[#eff2f4] rounded-[20px] overflow-hidden font-bold text-[#111416] text-sm"
+                      >
+                        Change File
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                        <span className="text-2xl">📄</span>
+                      </div>
+                      <div className="text-center">
+                        <p className="font-bold text-[#111416] text-lg">
+                          Drag and drop your PDF here
+                        </p>
+                        <p className="text-[#111416] text-sm">
+                          Or click to browse
+                        </p>
+                      </div>
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                        id="file-input"
+                        ref={fileInputRef}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleSelectFileClick}
+                        className="min-w-[84px] h-10 items-center justify-center px-4 py-0 relative bg-[#eff2f4] rounded-[20px] overflow-hidden font-bold text-[#111416] text-sm cursor-pointer"
+                      >
+                        Select File
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
-            </div>
-          </CardBody>
-        </Card>
-      )}
 
-      {/* Transactions Table */}
-      {transactions.length > 0 && (
-        <Card>
-          <CardHeader>
-            <h2 className="text-lg font-semibold text-neutral-900">
-              Transacciones Extraídas ({transactions.length})
-            </h2>
-          </CardHeader>
-          <CardBody>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-neutral-200">
-                    <th className="text-left py-3 px-4 font-medium text-neutral-700">Fecha</th>
-                    <th className="text-left py-3 px-4 font-medium text-neutral-700">Descripción</th>
-                    <th className="text-left py-3 px-4 font-medium text-neutral-700">Categoría</th>
-                    <th className="text-left py-3 px-4 font-medium text-neutral-700">Banco</th>
-                    <th className="text-right py-3 px-4 font-medium text-neutral-700">Monto</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((transaction, index) => (
-                    <tr key={index} className="border-b border-neutral-100 hover:bg-neutral-50">
-                      <td className="py-3 px-4 text-sm text-neutral-600">
-                        {formatDate(transaction.fecha_operacion)}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="text-sm font-medium text-neutral-900">
-                          {transaction.descripcion}
-                        </div>
-                        <div className="text-xs text-neutral-500">
-                          {transaction.tipo}
-                        </div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-700">
-                          {transaction.categoria}
+              {file && (
+                <div className="flex flex-col items-center pt-1 pb-3 px-4 relative self-stretch w-full flex-[0_0_auto]">
+                  <button
+                    onClick={handleUpload}
+                    disabled={uploading}
+                    className="min-w-[120px] h-10 items-center justify-center px-4 py-0 relative bg-blue-600 text-white rounded-[20px] overflow-hidden font-bold text-sm hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {uploading ? 'Processing...' : 'Process PDF'}
+                  </button>
+                </div>
+              )}
+
+              <div className="flex flex-col items-center pt-1 pb-3 px-4 relative self-stretch w-full flex-[0_0_auto]">
+                <p className="relative self-stretch mt-[-1.00px] font-normal text-[#637787] text-sm text-center tracking-[0] leading-[21px]">
+                  We support PDF format only
+                </p>
+              </div>
+
+              {/* Feedback de error de archivo */}
+              {fileError && (
+                <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 flex items-center gap-2">
+                  <span className="text-xl">❌</span>
+                  <span className="text-red-800 font-medium">{fileError}</span>
+                </div>
+              )}
+
+              {/* Upload Result */}
+              {uploadResult && (
+                <div className="flex flex-col items-start p-4 relative self-stretch w-full flex-[0_0_auto]">
+                  <div className={`p-4 rounded-lg w-full ${
+                    uploadResult.success 
+                      ? 'bg-green-50 border border-green-200' 
+                      : 'bg-red-50 border border-red-200'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                        uploadResult.success ? 'bg-green-100' : 'bg-red-100'
+                      }`}>
+                        <span className="text-lg">
+                          {uploadResult.success ? '✅' : '❌'}
                         </span>
-                      </td>
-                      <td className="py-3 px-4 text-sm text-neutral-600">
-                        {transaction.banco}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <span className={`text-sm font-medium ${
-                          transaction.monto < 0 ? 'text-error-600' : 'text-success-600'
+                      </div>
+                      <div>
+                        <p className={`font-medium ${
+                          uploadResult.success ? 'text-green-800' : 'text-red-800'
                         }`}>
-                          {formatCurrency(Math.abs(transaction.monto))}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardBody>
-        </Card>
-      )}
+                          {uploadResult.message}
+                        </p>
+                        {uploadResult.success && uploadResult.transactionsCount !== undefined && (
+                          <p className="text-sm text-green-600">
+                            {uploadResult.transactionsCount} transacciones extraídas
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-      {/* Instructions */}
-      <Card>
-        <CardHeader>
-          <h2 className="text-lg font-semibold text-neutral-900">Instrucciones</h2>
-        </CardHeader>
-        <CardBody>
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-primary-600 text-sm font-medium">1</span>
-              </div>
-              <div>
-                <p className="font-medium text-neutral-900">Descarga tu estado de cuenta</p>
-                <p className="text-sm text-neutral-600">
-                  Accede a tu banca en línea y descarga el estado de cuenta en formato PDF
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-primary-600 text-sm font-medium">2</span>
-              </div>
-              <div>
-                <p className="font-medium text-neutral-900">Sube el archivo</p>
-                <p className="text-sm text-neutral-600">
-                  Arrastra el PDF aquí o haz clic para seleccionarlo desde tu computadora
-                </p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-primary-600 text-sm font-medium">3</span>
-              </div>
-              <div>
-                <p className="font-medium text-neutral-900">Procesa y revisa</p>
-                <p className="text-sm text-neutral-600">
-                  Nuestro sistema extraerá automáticamente las transacciones y las categorizará
-                </p>
-              </div>
+              {/* Transactions Table */}
+              {transactions.length > 0 && (
+                <div className="flex flex-col items-start p-4 relative self-stretch w-full flex-[0_0_auto]">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Fecha
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Descripción
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Monto
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Categoría
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {transactions.map((transaction, index) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm text-gray-900">
+                              {transaction.fecha_operacion}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-900">
+                              {transaction.descripcion}
+                            </td>
+                            <td className={`px-4 py-3 text-sm font-medium ${
+                              transaction.monto < 0 ? 'text-red-600' : 'text-green-600'
+                            }`}>
+                              {formatPesos(transaction.monto)}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-900">
+                              {transaction.categoria}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </CardBody>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 };
 
-export default UploadPDF; 
+export default UploadBank; 

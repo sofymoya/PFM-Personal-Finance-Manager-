@@ -11,6 +11,7 @@ import {
 } from 'chart.js';
 import { Bar, Pie } from 'react-chartjs-2';
 import Select from 'react-select';
+import { formatPesos } from '../utils/formatters';
 
 ChartJS.register(
   CategoryScale,
@@ -536,12 +537,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
 
   // Función para formatear números con comas
   const formatCurrency = (amount: number): string => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(amount);
+    return formatPesos(amount);
   };
 
   // Calcular estadísticas

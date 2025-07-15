@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { formatPesos } from '../utils/formatters';
 
 const mockSummary = [
   { label: 'Total Income', value: '$15,200', color: 'bg-green-100 text-green-700' },
@@ -37,26 +39,92 @@ const barChartData = months.map(month => ({
 }));
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    navigate('/login');
+  };
+
   return (
     <div className="flex flex-col items-start relative bg-white min-h-screen">
       <div className="flex flex-col min-h-[800px] items-start relative self-stretch w-full flex-[0_0_auto] bg-white">
         <div className="flex self-stretch w-full flex-col items-start relative flex-[0_0_auto]">
           {/* Header */}
-          <div className="w-full border-b border-[#e5e8ea] px-10 py-3 flex items-center">
+          <div className="w-full border-b border-[#e5e8ea] px-10 py-3 flex items-center justify-between">
             <span className="font-bold text-lg text-[#111416]">FinTrack</span>
+            
+            {/* Navigation Buttons */}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate('/transactions')}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                📊 Transactions
+              </button>
+              <button
+                onClick={() => navigate('/upload-pdf')}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+              >
+                📄 Upload PDF
+              </button>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+              >
+                🚪 Logout
+              </button>
+            </div>
           </div>
+          
           {/* Main content */}
           <div className="items-start justify-center px-4 md:px-40 py-5 flex-1 grow flex relative self-stretch w-full">
             <div className="flex flex-col max-w-[960px] w-full items-center relative flex-1 grow mb-[-2.00px] mx-auto">
               {/* Summary Cards */}
-              <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                {mockSummary.map((item) => (
-                  <div key={item.label} className={`rounded-2xl p-6 shadow-sm flex flex-col items-center ${item.color}`}>
-                    <span className="text-2xl font-bold mb-1">{item.value}</span>
-                    <span className="text-base font-medium text-gray-500">{item.label}</span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Balance Total</p>
+                      <p className="text-2xl font-bold text-gray-900">
+                        {formatPesos(6100)}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-blue-100 rounded-full">
+                      <span className="text-2xl">💰</span>
+                    </div>
                   </div>
-                ))}
+                </div>
+
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Ingresos del Mes</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {formatPesos(3300)}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-green-100 rounded-full">
+                      <span className="text-2xl">📈</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Gastos del Mes</p>
+                      <p className="text-2xl font-bold text-red-600">
+                        {formatPesos(284)}
+                      </p>
+                    </div>
+                    <div className="p-3 bg-red-100 rounded-full">
+                      <span className="text-2xl">📉</span>
+                    </div>
+                  </div>
+                </div>
               </div>
+              
               {/* Bar Chart Real agrupado por mes */}
               <div className="w-full bg-white rounded-2xl shadow-sm p-6 mb-8 flex flex-col items-center">
                 <span className="font-bold text-lg text-[#111416] mb-2">Spending & Income by Month</span>
@@ -74,10 +142,19 @@ const Dashboard: React.FC = () => {
                   </ResponsiveContainer>
                 </div>
               </div>
+              
               {/* Latest Transactions */}
               <div className="flex flex-col items-start pt-5 pb-3 px-4 relative self-stretch w-full flex-[0_0_auto]">
-                <div className="font-bold text-[#111416] text-[22px] tracking-[0] leading-7 mb-2">
-                  Latest Transactions
+                <div className="flex items-center justify-between w-full mb-4">
+                  <div className="font-bold text-[#111416] text-[22px] tracking-[0] leading-7">
+                    Latest Transactions
+                  </div>
+                  <button
+                    onClick={() => navigate('/transactions')}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    View All 📊
+                  </button>
                 </div>
                 <div className="w-full overflow-x-auto">
                   <table className="min-w-full bg-white rounded-xl shadow-sm">
@@ -88,15 +165,23 @@ const Dashboard: React.FC = () => {
                         <th className="px-4 py-2 text-right text-gray-500 font-semibold">Amount</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {mockTransactions.map((tx, idx) => (
-                        <tr key={idx} className="border-b last:border-b-0">
-                          <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{tx.date}</td>
-                          <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{tx.description}</td>
-                          <td className={`px-4 py-2 text-right font-semibold ${tx.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>{tx.type === 'income' ? '+' : '-'}${Math.abs(tx.amount).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
+                    <tbody className="divide-y divide-gray-200">
+                          {mockTransactions.slice(0, 5).map((transaction, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                {new Date(transaction.date).toLocaleDateString('es-MX')}
+                              </td>
+                              <td className="px-4 py-3 text-sm text-gray-900">
+                                {transaction.description}
+                              </td>
+                              <td className={`px-4 py-3 text-sm font-medium ${
+                                transaction.amount < 0 ? 'text-red-600' : 'text-green-600'
+                              }`}>
+                                {formatPesos(transaction.amount)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
                   </table>
                 </div>
               </div>

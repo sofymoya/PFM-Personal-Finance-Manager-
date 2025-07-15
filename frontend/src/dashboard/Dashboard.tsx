@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, formatPesos } from '../utils/formatters';
 import TransactionTable from '../components/TransactionTable';
 import type { Transaction } from '../components/TransactionTable';
 
@@ -126,7 +126,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId }) => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium opacity-90">Saldo Neto</p>
-                    <p className="text-3xl font-bold">{formatCurrency(saldoGlobal.saldo_neto)}</p>
+                    <p className="text-3xl font-bold">{formatPesos(saldoGlobal.saldo_neto)}</p>
                   </div>
                   <div className="text-4xl">💰</div>
                 </div>
@@ -137,7 +137,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId }) => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium opacity-90">Ahorro</p>
-                    <p className="text-2xl font-bold">{formatCurrency(saldoGlobal.total_ahorro)}</p>
+                    <p className="text-2xl font-bold">{formatPesos(saldoGlobal.total_ahorro)}</p>
                   </div>
                   <div className="text-4xl">🏦</div>
                 </div>
@@ -148,7 +148,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId }) => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium opacity-90">Corriente</p>
-                    <p className="text-2xl font-bold">{formatCurrency(saldoGlobal.total_corriente)}</p>
+                    <p className="text-2xl font-bold">{formatPesos(saldoGlobal.total_corriente)}</p>
                   </div>
                   <div className="text-4xl">💳</div>
                 </div>
@@ -159,7 +159,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId }) => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium opacity-90">Inversión</p>
-                    <p className="text-2xl font-bold">{formatCurrency(saldoGlobal.total_inversion)}</p>
+                    <p className="text-2xl font-bold">{formatPesos(saldoGlobal.total_inversion)}</p>
                   </div>
                   <div className="text-4xl">📈</div>
                 </div>
@@ -185,16 +185,16 @@ const Dashboard: React.FC<DashboardProps> = ({ userId }) => {
                   <div className="space-y-2">
                     <div>
                       <p className="text-sm text-gray-600">Saldo Actual</p>
-                      <p className="text-2xl font-bold text-gray-900">{formatCurrency(cuenta.saldo_actual)}</p>
+                      <p className="text-lg font-bold text-gray-900">{formatPesos(cuenta.saldo_actual)}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Disponible</p>
-                      <p className="text-lg font-semibold text-green-600">{formatCurrency(cuenta.saldo_disponible)}</p>
+                      <p className="text-lg font-semibold text-green-600">{formatPesos(cuenta.saldo_disponible)}</p>
                     </div>
                     {cuenta.limite_credito && (
                       <div>
                         <p className="text-sm text-gray-600">Límite de Crédito</p>
-                        <p className="text-lg font-semibold text-blue-600">{formatCurrency(cuenta.limite_credito)}</p>
+                        <p className="text-lg font-semibold text-blue-600">{formatPesos(cuenta.limite_credito)}</p>
                       </div>
                     )}
                   </div>
@@ -245,11 +245,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userId }) => {
                       <div className="flex justify-between items-center">
                         <div>
                           <p className="text-sm text-gray-600">Actual</p>
-                          <p className="text-lg font-bold text-gray-900">{formatCurrency(meta.monto_actual)}</p>
+                          <p className="text-lg font-bold text-gray-900">{formatPesos(meta.monto_actual)}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-sm text-gray-600">Objetivo</p>
-                          <p className="text-lg font-bold" style={{ color: meta.color }}>{formatCurrency(meta.monto_objetivo)}</p>
+                          <p className="text-lg font-bold" style={{ color: meta.color }}>{formatPesos(meta.monto_objetivo)}</p>
                         </div>
                       </div>
                       

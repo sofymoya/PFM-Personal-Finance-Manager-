@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatPesos } from '../utils/formatters';
 
 export interface Transaction {
   id: number;
@@ -124,12 +125,12 @@ const TransactionTable: React.FC<TransactionTableProps> = ({
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold">
-                    <span className={`${
+                    <span className={`$${
                       isAbono 
                         ? 'text-green-600 bg-green-100' 
                         : 'text-red-600 bg-red-100'
                     } px-3 py-1 rounded-full text-xs font-medium`}>
-                      {formatAmount(transaction.monto)}
+                      {formatPesos(transaction.monto)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
