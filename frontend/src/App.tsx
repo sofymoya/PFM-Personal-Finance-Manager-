@@ -18,13 +18,13 @@ interface User {
   name?: string;
 }
 
-type AppProps = {
-  routerComponent?: React.ComponentType<{ children: ReactNode }>;
-};
+interface AppProps {
+  routerComponent?: typeof BrowserRouter;
+}
 
 function App({ routerComponent: RouterComponent = BrowserRouter }: AppProps) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -56,23 +56,22 @@ function App({ routerComponent: RouterComponent = BrowserRouter }: AppProps) {
         return { success: true };
       }
       return { success: false, error: 'Credenciales inválidas' };
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Error al iniciar sesión' };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Error al iniciar sesión' };
     }
   };
 
   const handleRegister = async (name: string, email: string, password: string) => {
     try {
-      const response: any = await authApi.register(name, email, password);
-      if (response.token || response.access_token) {
-        const token = response.token || response.access_token;
-        localStorage.setItem('token', token);
+      const response = await authApi.register(name, email, password);
+      if (response.token) {
+        localStorage.setItem('token', response.token);
         setUser({ id: 1, username: name, email, name });
         return { success: true };
       }
       return { success: false, error: 'Error al registrarse' };
-    } catch (error) {
-      return { success: false, error: 'Error al registrarse' };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Error al registrarse' };
     }
   };
 
@@ -92,7 +91,7 @@ function App({ routerComponent: RouterComponent = BrowserRouter }: AppProps) {
   );
 }
 
-function AppRoutes({ user, setUser, loading }: { user: any, setUser: any, loading: boolean }) {
+function AppRoutes({ user, setUser, loading }: { user: User | null, setUser: React.Dispatch<React.SetStateAction<User | null>>, loading: boolean }) {
   const navigate = useNavigate();
 
   // handleLogin debe coincidir con la firma esperada por Login
@@ -106,23 +105,22 @@ function AppRoutes({ user, setUser, loading }: { user: any, setUser: any, loadin
         return { success: true };
       }
       return { success: false, error: 'Credenciales inválidas' };
-    } catch (error: any) {
-      return { success: false, error: error.message || 'Error al iniciar sesión' };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Error al iniciar sesión' };
     }
   };
 
   const handleRegister = async (name: string, email: string, password: string) => {
     try {
-      const response: any = await authApi.register(name, email, password);
-      if (response.token || response.access_token) {
-        const token = response.token || response.access_token;
-        localStorage.setItem('token', token);
+      const response = await authApi.register(name, email, password);
+      if (response.token) {
+        localStorage.setItem('token', response.token);
         setUser({ id: 1, username: name, email, name });
         return { success: true };
       }
       return { success: false, error: 'Error al registrarse' };
-    } catch (error) {
-      return { success: false, error: 'Error al registrarse' };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Error al registrarse' };
     }
   };
 
@@ -167,14 +165,14 @@ function AppRoutes({ user, setUser, loading }: { user: any, setUser: any, loadin
 
 // ErrorBoundary para capturar errores de renderizado
 class ErrorBoundary extends React.Component<{ fallback: ReactNode, children: ReactNode }, { hasError: boolean }> {
-  constructor(props: any) {
+  constructor(props: { fallback: ReactNode, children: ReactNode }) {
     super(props);
     this.state = { hasError: false };
   }
   static getDerivedStateFromError() {
     return { hasError: true };
   }
-  componentDidCatch(error: any, errorInfo: any) {
+  componentDidCatch(error: unknown, errorInfo: unknown) {
     // Puedes loguear el error aquí si quieres
   }
   render() {

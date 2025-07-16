@@ -23,24 +23,49 @@ ChartJS.register(
   ArcElement
 );
 
-// Definir la interfaz localmente para evitar problemas de importación
+// Define el tipo Transaction para las transacciones si no existe
 interface Transaction {
   id: number;
-  fecha: string;
-  descripcion: string;
-  monto: number;
-  categoria?: {
-    id: number;
-    nombre: string;
-  };
+  user_id: number;
+  description: string;
+  amount: number;
+  date: string;
+  category: string;
+  created_at?: string;
 }
 
-// 1. Definir tipo explícito para las transacciones extraídas del PDF
-interface ExtractedTransaction {
+interface PdfTransaction {
   fecha_operacion?: string;
   fecha_cargo?: string;
   descripcion: string;
-  monto: number | string;
+  monto: number;
+  categoria?: string;
+}
+
+interface PdfResult {
+  method: string;
+  total_pages: number;
+  text: string;
+  transactions: PdfTransaction[];
+}
+
+interface CategoriaStats {
+  categoria: string;
+  gastos: number;
+  ingresos: number;
+  total: number;
+}
+
+interface MesStats {
+  nombre: string;
+  gastos: number;
+  ingresos: number;
+  total: number;
+}
+
+interface CategoryOption {
+  value: string;
+  label: string;
 }
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -146,7 +171,7 @@ const deleteTransaction = async (userId: number, transactionId: number): Promise
 };
 
 // Función para subir PDF
-const uploadPDF = async (userId: number, file: File): Promise<any> => {
+const uploadPDF = async (userId: number, file: File): Promise<PdfResult> => {
   const token = getToken();
   if (!token) {
     throw new Error('No hay token de autenticación');
@@ -170,7 +195,7 @@ const uploadPDF = async (userId: number, file: File): Promise<any> => {
   return response.json();
 };
 
-const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
+const TransactionTable: React.FC<{ userId: number }> = ({ userId }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -183,25 +208,12 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
     categoria: ''
   });
   const [showPdfUpload, setShowPdfUpload] = useState(false);
-  // 2. Tipar correctamente pdfResult y estados relacionados
-  const [pdfResult, setPdfResult] = useState<{
-    method?: string;
-    total_pages?: number;
-    text?: string;
-    transactions?: ExtractedTransaction[];
-  } | null>(null);
+  const [pdfResult, setPdfResult] = useState<PdfResult | null>(null);
   const [uploadingPdf, setUploadingPdf] = useState(false);
   const [savingTransactions, setSavingTransactions] = useState(false);
 
   // Filtros de búsqueda
-  const [filter, setFilter] = useState<{
-    fechaInicio: string;
-    fechaFin: string;
-    categoria: string;
-    montoMin: string;
-    montoMax: string;
-    descripcion: string;
-  }>({
+  const [filter, setFilter] = useState({
     fechaInicio: '',
     fechaFin: '',
     categoria: '',
@@ -212,45 +224,21 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
 
   // Estados para edición rápida de categoría
   const [editingCategory, setEditingCategory] = useState<number | null>(null);
-  const [categoryOptions, setCategoryOptions] = useState<{ value: string; label: string }[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([]);
   
   // Estado para pestañas por mes
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
 
-  // 1. Define explicit types for grouping and stats objects
-  interface TransactionsByMonth {
-    [month: string]: {
-      name: string;
-      transactions: Transaction[];
-    };
-  }
-
-  interface CategoryStats {
-    [category: string]: {
-      gastos: number;
-      ingresos: number;
-      total: number;
-    };
-  }
-
-  interface MonthStats {
-    [month: string]: {
-      nombre: string;
-      gastos: number;
-      ingresos: number;
-      total: number;
-    };
-  }
-
   // Obtener lista de categorías únicas
-  const categoriasUnicas = Array.from(new Set(transactions.map(t => t.categoria ? (typeof t.categoria === 'string' ? t.categoria : t.categoria?.nombre) : 'Sin categoría')));
+  const categoriasUnicas = Array.from(new Set(transactions.map(t => t.category)));
 
-  // 2. Update groupTransactionsByMonth to use TransactionsByMonth type
-  const groupTransactionsByMonth = (): TransactionsByMonth => {
-    const grouped = transactions.reduce((acc: TransactionsByMonth, transaction: Transaction) => {
-      const date = new Date(transaction.fecha);
+  // Agrupar transacciones por mes
+  const groupTransactionsByMonth = () => {
+    const grouped = transactions.reduce((acc, transaction) => {
+      const date = new Date(transaction.date);
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       const monthName = date.toLocaleDateString('es-ES', { year: 'numeric', month: 'long' });
+      
       if (!acc[monthKey]) {
         acc[monthKey] = {
           name: monthName,
@@ -259,14 +247,15 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
       }
       acc[monthKey].transactions.push(transaction);
       return acc;
-    }, {} as TransactionsByMonth);
+    }, {} as { [key: string]: { name: string; transactions: Transaction[] } });
+
     // Ordenar meses del más reciente al más antiguo
     return Object.entries(grouped)
       .sort(([a], [b]) => b.localeCompare(a))
-      .reduce((acc: TransactionsByMonth, [key, value]: [string, { name: string; transactions: Transaction[] }]) => {
+      .reduce((acc, [key, value]) => {
         acc[key] = value;
         return acc;
-      }, {} as TransactionsByMonth);
+      }, {} as { [key: string]: { name: string; transactions: Transaction[] } });
   };
 
   const transactionsByMonth = groupTransactionsByMonth();
@@ -282,21 +271,21 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
     }
     
     return transactionsToFilter
-      .filter((t: Transaction) => {
+      .filter(t => {
         // Fecha
-        if (filter.fechaInicio && new Date(t.fecha) < new Date(filter.fechaInicio)) return false;
-        if (filter.fechaFin && new Date(t.fecha) > new Date(filter.fechaFin)) return false;
+        if (filter.fechaInicio && new Date(t.date) < new Date(filter.fechaInicio)) return false;
+        if (filter.fechaFin && new Date(t.date) > new Date(filter.fechaFin)) return false;
         // Categoría
-        const cat = t.categoria ? (typeof t.categoria === 'string' ? t.categoria : t.categoria?.nombre) : 'Sin categoría';
+        const cat = t.category;
         if (filter.categoria && filter.categoria !== cat) return false;
         // Monto
-        if (filter.montoMin && t.monto < parseFloat(filter.montoMin)) return false;
-        if (filter.montoMax && t.monto > parseFloat(filter.montoMax)) return false;
+        if (filter.montoMin && t.amount < parseFloat(filter.montoMin)) return false;
+        if (filter.montoMax && t.amount > parseFloat(filter.montoMax)) return false;
         // Descripción
-        if (filter.descripcion && !t.descripcion.toLowerCase().includes(filter.descripcion.toLowerCase())) return false;
+        if (filter.descripcion && !t.description.toLowerCase().includes(filter.descripcion.toLowerCase())) return false;
         return true;
       })
-      .sort((a: Transaction, b: Transaction) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()); // Ordenar del más reciente al más antiguo
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()); // Ordenar del más reciente al más antiguo
   };
 
   const filteredTransactions = getFilteredTransactions();
@@ -307,8 +296,12 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
       setError('');
       const data = await loadTransactions(userId);
       setTransactions(data);
-    } catch (err) {
-      setError('Error al cargar transacciones');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError('Error al cargar transacciones: ' + err.message);
+      } else {
+        setError('Error desconocido al cargar transacciones');
+      }
       console.error('Error:', err);
     } finally {
       setLoading(false);
@@ -365,8 +358,12 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
       
       // Ocultar el formulario
       setShowForm(false);
-    } catch (err) {
-      alert('Error al guardar la transacción');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        alert('Error al guardar la transacción: ' + err.message);
+      } else {
+        alert('Error desconocido al guardar la transacción');
+      }
       console.error('Error:', err);
     }
   };
@@ -374,10 +371,10 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
   const handleEdit = (transaction: Transaction) => {
     setEditingTransaction(transaction);
     setFormData({
-      fecha: transaction.fecha,
-      descripcion: transaction.descripcion,
-      monto: transaction.monto.toString(),
-      categoria: transaction.categoria ? transaction.categoria.nombre : ''
+      fecha: transaction.date,
+      descripcion: transaction.description,
+      monto: transaction.amount.toString(),
+      categoria: transaction.category
     });
     setShowForm(true);
   };
@@ -391,8 +388,12 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
       await deleteTransaction(userId, transactionId);
       // Remover la transacción de la lista
       setTransactions(transactions.filter(t => t.id !== transactionId));
-    } catch (err) {
-      alert('Error al eliminar la transacción');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        alert('Error al eliminar la transacción: ' + err.message);
+      } else {
+        alert('Error desconocido al eliminar la transacción');
+      }
       console.error('Error:', err);
     }
   };
@@ -422,8 +423,12 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
       const result = await uploadPDF(userId, file);
       setPdfResult(result);
       setShowPdfUpload(true);
-    } catch (err) {
-      alert('Error al procesar el PDF');
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        alert('Error al procesar el PDF: ' + err.message);
+      } else {
+        alert('Error desconocido al procesar el PDF');
+      }
       console.error('Error:', err);
     } finally {
       setUploadingPdf(false);
@@ -498,7 +503,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
   };
 
   // Función para guardar transacciones extraídas del PDF
-  const handleSaveTransactions = async (extractedTransactions: ExtractedTransaction[]) => {
+  const handleSaveTransactions = async (extractedTransactions: PdfTransaction[]) => {
     try {
       setSavingTransactions(true);
       
@@ -514,7 +519,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
         const categoria = categorizeTransaction(txn.descripcion);
         
         return {
-          fecha: convertDate(txn.fecha_operacion ?? txn.fecha_cargo ?? ''),
+          fecha: convertDate(txn.fecha_operacion ?? txn.fecha_cargo ?? new Date().toISOString().split('T')[0]),
           descripcion: txn.descripcion,
           monto: monto,
           categoria: categoria
@@ -529,8 +534,12 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
         try {
           const savedTxn = await createTransaction(userId, txn);
           savedTransactions.push(savedTxn);
-        } catch (error) {
-          console.error(`Error guardando transacción: ${txn.descripcion}`, error);
+        } catch (error: unknown) {
+          if (error instanceof Error) {
+            console.error(`Error guardando transacción: ${txn.descripcion}`, error);
+          } else {
+            console.error(`Error desconocido guardando transacción: ${txn.descripcion}`, error);
+          }
         }
       }
 
@@ -544,9 +553,14 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
       setShowPdfUpload(false);
       setPdfResult(null);
       
-    } catch (error) {
-      console.error('Error guardando transacciones:', error);
-      alert('❌ Error al guardar las transacciones');
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error('Error guardando transacciones:', error);
+        alert('❌ Error al guardar las transacciones: ' + error.message);
+      } else {
+        console.error('Error desconocido al guardar transacciones:', error);
+        alert('❌ Error al guardar las transacciones');
+      }
     } finally {
       setSavingTransactions(false);
     }
@@ -569,14 +583,8 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
   };
 
   // Función para obtener el nombre de la categoría
-  const getCategoryName = (category: any): string => {
-    if (typeof category === 'string') {
-      return category;
-    }
-    if (category && typeof category === 'object' && category.nombre) {
-      return category.nombre;
-    }
-    return 'Sin categoría';
+  const getCategoryName = (category: string): string => {
+    return category;
   };
 
   // Función para formatear números con comas
@@ -584,50 +592,56 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
     return formatPesos(amount);
   };
 
-  // 3. Update calcularEstadisticas to use CategoryStats and MonthStats
-  const calcularEstadisticas = () => {
+  // Calcular estadísticas
+  const calcularEstadisticas = (): {
+    totalGastado: number;
+    totalIngresado: number;
+    balance: number;
+    statsPorCategoria: { [key: string]: CategoriaStats };
+    statsPorMes: { [key: string]: MesStats };
+  } => {
     const totalGastado = transactions
-      .filter((t: Transaction) => t.monto < 0)
-      .reduce((sum: number, t: Transaction) => sum + Math.abs(t.monto), 0);
+      .filter((t: Transaction) => t.amount < 0)
+      .reduce((sum: number, t: Transaction) => sum + Math.abs(t.amount), 0);
     
     const totalIngresado = transactions
-      .filter((t: Transaction) => t.monto > 0)
-      .reduce((sum: number, t: Transaction) => sum + t.monto, 0);
+      .filter((t: Transaction) => t.amount > 0)
+      .reduce((sum: number, t: Transaction) => sum + t.amount, 0);
     
     const balance = totalIngresado - totalGastado;
     
     // Estadísticas por categoría
-    const statsPorCategoria = transactions.reduce((acc: CategoryStats, t: Transaction) => {
-      const categoria = getCategoryName(t.categoria);
+    const statsPorCategoria = transactions.reduce((acc, t) => {
+      const categoria = getCategoryName(t.category ?? 'Sin categoría');
       if (!acc[categoria]) {
-        acc[categoria] = { gastos: 0, ingresos: 0, total: 0 };
+        acc[categoria] = { categoria, gastos: 0, ingresos: 0, total: 0 };
       }
-      if (t.monto < 0) {
-        acc[categoria].gastos += Math.abs(t.monto);
+      if (t.amount < 0) {
+        acc[categoria].gastos += Math.abs(t.amount);
       } else {
-        acc[categoria].ingresos += t.monto;
+        acc[categoria].ingresos += t.amount;
       }
-      acc[categoria].total += t.monto;
+      acc[categoria].total += t.amount;
       return acc;
-    }, {} as CategoryStats);
+    }, {} as { [key: string]: CategoriaStats });
     
     // Estadísticas por mes
-    const statsPorMes = transactions.reduce((acc: MonthStats, t: Transaction) => {
-      const fecha = new Date(t.fecha);
+    const statsPorMes = transactions.reduce((acc, t) => {
+      const fecha = new Date(t.date);
       const mesKey = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
       const mesNombre = fecha.toLocaleDateString('es-ES', { year: 'numeric', month: 'long' });
       
       if (!acc[mesKey]) {
         acc[mesKey] = { nombre: mesNombre, gastos: 0, ingresos: 0, total: 0 };
       }
-      if (t.monto < 0) {
-        acc[mesKey].gastos += Math.abs(t.monto);
+      if (t.amount < 0) {
+        acc[mesKey].gastos += Math.abs(t.amount);
       } else {
-        acc[mesKey].ingresos += t.monto;
+        acc[mesKey].ingresos += t.amount;
       }
-      acc[mesKey].total += t.monto;
+      acc[mesKey].total += t.amount;
       return acc;
-    }, {} as MonthStats);
+    }, {} as { [key: string]: MesStats });
     
     return {
       totalGastado,
@@ -639,11 +653,8 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
   };
 
   // Preparar datos para gráfica de barras por mes
-  const prepararDatosGraficaBarras = () => {
-    const stats = calcularEstadisticas();
-    
-    // Convertir a array y ordenar por fecha real
-    const meses = Object.entries(stats.statsPorMes).map(([key, data]: [string, { nombre: string; gastos: number; ingresos: number; total: number }]) => ({
+  const prepararDatosGraficaBarras = (stats: { statsPorMes: { [key: string]: MesStats } }) => {
+    const meses = Object.entries(stats.statsPorMes).map(([key, data]: [string, MesStats]) => ({
       key,
       ...data
     })).sort((a, b) => {
@@ -652,18 +663,18 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
     });
     
     return {
-      labels: meses.map((m) => m.nombre),
+      labels: meses.map((m: MesStats) => m.nombre),
       datasets: [
         {
           label: 'Gastos',
-          data: meses.map((m) => m.gastos),
+          data: meses.map((m: MesStats) => m.gastos),
           backgroundColor: 'rgba(220, 53, 69, 0.8)',
           borderColor: 'rgba(220, 53, 69, 1)',
           borderWidth: 1,
         },
         {
           label: 'Ingresos',
-          data: meses.map((m) => m.ingresos),
+          data: meses.map((m: MesStats) => m.ingresos),
           backgroundColor: 'rgba(40, 167, 69, 0.8)',
           borderColor: 'rgba(40, 167, 69, 1)',
           borderWidth: 1,
@@ -673,11 +684,10 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
   };
 
   // Preparar datos para gráfica de pastel por categoría
-  const prepararDatosGraficaPastel = () => {
-    const stats = calcularEstadisticas();
+  const prepararDatosGraficaPastel = (stats: { statsPorCategoria: { [key: string]: CategoriaStats } }) => {
     const categorias = Object.entries(stats.statsPorCategoria)
-      .filter(([_, data]: [string, { gastos: number; ingresos: number; total: number }]) => data.gastos > 0)
-      .sort(([_, a]: [string, { gastos: number; ingresos: number; total: number }], [__, b]: [string, { gastos: number; ingresos: number; total: number }]) => b.gastos - a.gastos);
+      .filter(([, data]) => data.gastos > 0)
+      .sort(([, a], [, b]) => b.gastos - a.gastos);
     
     const colors = [
       '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57',
@@ -685,10 +695,10 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
     ];
     
     return {
-      labels: categorias.map(([cat, _]) => cat),
+      labels: categorias.map(([cat]) => cat),
       datasets: [
         {
-          data: categorias.map(([_, data]: [string, { gastos: number; ingresos: number; total: number }]) => data.gastos),
+          data: categorias.map(([, data]) => data.gastos),
           backgroundColor: colors.slice(0, categorias.length),
           borderWidth: 2,
           borderColor: '#fff',
@@ -720,7 +730,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
         // Actualizar la transacción localmente
         setTransactions(prev => prev.map(t => 
           t.id === transactionId 
-            ? { ...t, categoria: { id: updatedTransaction.categoria?.id || 0, nombre: newCategoryName } }
+            ? { ...t, category: newCategoryName }
             : t
         ));
         setEditingCategory(null);
@@ -729,8 +739,12 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
         const errorData = await response.text();
         console.error('Error al actualizar categoría:', response.status, errorData);
       }
-    } catch (error) {
-      console.error('Error:', error);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        console.error('Error:', error);
+      } else {
+        console.error('Error desconocido:', error);
+      }
     }
   };
 
@@ -742,7 +756,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
 
   // Preparar opciones de categorías para el dropdown
   useEffect(() => {
-    const uniqueCategories = [...new Set(transactions.map(t => getCategoryName(t.categoria)))];
+    const uniqueCategories = [...new Set(transactions.map(t => getCategoryName(t.category ?? 'Sin categoría')))];
     const options = uniqueCategories.map(cat => ({
       value: cat,
       label: cat
@@ -905,7 +919,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
           }}>
             <h4 style={{ margin: '0 0 16px 0', textAlign: 'center' }}>📊 Gastos e Ingresos por Mes</h4>
             <Bar 
-              data={prepararDatosGraficaBarras()} 
+              data={prepararDatosGraficaBarras(stats)} 
               options={{
                 responsive: true,
                 plugins: {
@@ -940,7 +954,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
           }}>
             <h4 style={{ margin: '0 0 16px 0', textAlign: 'center' }}>🥧 Gastos por Categoría</h4>
             <Pie 
-              data={prepararDatosGraficaPastel()} 
+              data={prepararDatosGraficaPastel(stats)} 
               options={{
                 responsive: true,
                 plugins: {
@@ -984,8 +998,8 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
               </thead>
               <tbody>
                 {Object.entries(stats.statsPorCategoria)
-                  .sort(([_, a]: [string, { gastos: number; ingresos: number; total: number }], [__, b]: [string, { gastos: number; ingresos: number; total: number }]) => Math.abs(b.total) - Math.abs(a.total))
-                  .map(([categoria, data]: [string, { gastos: number; ingresos: number; total: number }]) => (
+                  .sort(([, a], [, b]) => Math.abs(b.total) - Math.abs(a.total))
+                  .map(([categoria, data]) => (
                     <tr key={categoria}>
                       <td style={{ padding: 12, borderBottom: '1px solid #eee' }}>
                         <span style={{
@@ -1188,13 +1202,13 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
           </tr>
         </thead>
         <tbody>
-          {pdfResult.transactions.map((txn: ExtractedTransaction, idx: number) => (
+          {pdfResult.transactions.map((txn: PdfTransaction, idx: number) => (
             <tr key={idx}>
               <td style={{ padding: 8, border: '1px solid #ddd' }}>{txn.fecha_operacion}</td>
               <td style={{ padding: 8, border: '1px solid #ddd' }}>{txn.fecha_cargo}</td>
               <td style={{ padding: 8, border: '1px solid #ddd' }}>{txn.descripcion}</td>
-              <td style={{ padding: 8, border: '1px solid #ddd', color: (() => { const montoNum = typeof txn.monto === 'number' ? txn.monto : parseFloat(txn.monto.toString()); return montoNum < 0 ? 'red' : 'green'; })() }}>
-                        {formatCurrency(Math.abs(typeof txn.monto === 'number' ? txn.monto : parseFloat(txn.monto.toString())))}
+              <td style={{ padding: 8, border: '1px solid #ddd', color: txn.monto < 0 ? 'red' : 'green' }}>
+                        {formatCurrency(Math.abs(txn.monto))}
               </td>
             </tr>
           ))}
@@ -1237,9 +1251,9 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
         Cerrar
       </button>
             
-            {Array.isArray(pdfResult.transactions) && pdfResult.transactions.length > 0 && (
+            {pdfResult.transactions && pdfResult.transactions.length > 0 && (
               <button 
-                onClick={() => handleSaveTransactions(pdfResult.transactions!)}
+                onClick={() => handleSaveTransactions(pdfResult.transactions)}
                 disabled={savingTransactions}
                 style={{ 
                   backgroundColor: savingTransactions ? '#6c757d' : '#28a745', 
@@ -1283,15 +1297,15 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
               <div style={{ fontSize: 14, color: '#d32f2f' }}>
                 Gastos: {formatCurrency(
                   transactionsByMonth[selectedMonth].transactions
-                    .filter((t: Transaction) => t.monto < 0)
-                    .reduce((sum: number, t: Transaction) => sum + Math.abs(t.monto), 0)
+                    .filter((t: Transaction) => t.amount < 0)
+                    .reduce((sum: number, t: Transaction) => sum + Math.abs(t.amount), 0)
                 )}
               </div>
               <div style={{ fontSize: 14, color: '#388e3c' }}>
                 Ingresos: {formatCurrency(
                   transactionsByMonth[selectedMonth].transactions
-                    .filter((t: Transaction) => t.monto > 0)
-                    .reduce((sum: number, t: Transaction) => sum + t.monto, 0)
+                    .filter((t: Transaction) => t.amount > 0)
+                    .reduce((sum: number, t: Transaction) => sum + t.amount, 0)
                 )}
               </div>
             </div>
@@ -1395,25 +1409,25 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
             {filteredTransactions.map((transaction) => (
               <tr key={transaction.id}>
                 <td style={{ padding: 10, border: '1px solid #ddd' }}>
-                  {new Date(transaction.fecha).toLocaleDateString('es-ES')}
+                  {new Date(transaction.date).toLocaleDateString('es-ES')}
                 </td>
                 <td style={{ padding: 10, border: '1px solid #ddd' }}>
-                  {transaction.descripcion}
+                  {transaction.description}
                 </td>
                 <td style={{ 
                   padding: 10, 
                   textAlign: 'right',
                   border: '1px solid #ddd',
-                  color: transaction.monto < 0 ? '#dc3545' : '#28a745',
+                  color: transaction.amount < 0 ? '#dc3545' : '#28a745',
                   fontWeight: 'bold'
                 }}>
-                  {formatCurrency(Math.abs(transaction.monto))}
+                  {formatCurrency(Math.abs(transaction.amount))}
                 </td>
                 <td style={{ padding: 10, border: '1px solid #ddd' }}>
                   {editingCategory === transaction.id ? (
                     <div style={{ minWidth: 150 }}>
                       <Select
-                        value={{ value: getCategoryName(transaction.categoria), label: getCategoryName(transaction.categoria) }}
+                        value={{ value: getCategoryName(transaction.category ?? 'Sin categoría'), label: getCategoryName(transaction.category ?? 'Sin categoría') }}
                         options={categoryOptions}
                         onChange={(option) => {
                           if (option) {
@@ -1459,7 +1473,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
                   ) : (
                     <span 
                       style={{
-                        backgroundColor: getCategoryColor(getCategoryName(transaction.categoria)),
+                        backgroundColor: getCategoryColor(getCategoryName(transaction.category ?? 'Sin categoría')),
                         color: 'white',
                         padding: '4px 8px',
                         borderRadius: '12px',
@@ -1480,7 +1494,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
                       onClick={() => setEditingCategory(transaction.id)}
                       title="Haz clic para editar categoría"
                     >
-                      {getCategoryName(transaction.categoria)} ✏️
+                      {getCategoryName(transaction.category ?? 'Sin categoría')} ✏️
                     </span>
                   )}
                 </td>
@@ -1515,4 +1529,4 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
   );
 };
 
-export default Transactions;
+export default TransactionTable;

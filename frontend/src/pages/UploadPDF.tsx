@@ -4,7 +4,8 @@ import image from "../assets/image.svg";
 import vector0 from "../assets/vector-0.svg";
 import { formatPesos } from '../utils/formatters';
 
-interface Transaction {
+// 1. Definir tipo explícito para las transacciones extraídas del backend
+interface BackendTransaction {
   fecha_operacion: string;
   descripcion: string;
   monto: number;
@@ -18,7 +19,8 @@ export const UploadBank = () => {
   const [file, setFile] = useState<File | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  // 2. Tipar correctamente los estados y callbacks
+  const [transactions, setTransactions] = useState<BackendTransaction[]>([]);
   const [uploadResult, setUploadResult] = useState<{
     success: boolean;
     message: string;
@@ -100,7 +102,8 @@ export const UploadBank = () => {
         // El backend devuelve las transacciones en 'transacciones_guardadas'
         const backendTransactions = result.transacciones_guardadas || result.transactions || [];
         
-        const txs = backendTransactions.map((t: any) => ({
+        // 3. Tipar el mapeo de backendTransactions
+        const txs: BackendTransaction[] = backendTransactions.map((t: any): BackendTransaction => ({
           fecha_operacion: t.fecha_operacion || t.fecha || t.date || t.fecha_transaccion || '',
           descripcion: t.descripcion || t.description || t.desc || t.concepto || '',
           monto: t.monto ?? t.amount ?? t.importe ?? t.valor ?? 0,

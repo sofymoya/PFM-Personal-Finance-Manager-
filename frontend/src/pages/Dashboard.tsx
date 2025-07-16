@@ -3,13 +3,21 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { formatPesos } from '../utils/formatters';
 
-const mockSummary = [
+// 1. Tipar explícitamente los mocks y callbacks
+interface MockTransaction {
+  date: string;
+  description: string;
+  amount: number;
+  type: 'income' | 'expense';
+}
+
+const mockSummary: { label: string; value: string; color: string }[] = [
   { label: 'Total Income', value: '$15,200', color: 'bg-green-100 text-green-700' },
   { label: 'Total Expenses', value: '$9,100', color: 'bg-red-100 text-red-700' },
   { label: 'Net Savings', value: '$6,100', color: 'bg-blue-100 text-blue-700' },
 ];
 
-const mockTransactions = [
+const mockTransactions: MockTransaction[] = [
   { date: '2024-01-10', description: 'Supermarket', amount: -120, type: 'expense' },
   { date: '2024-01-09', description: 'Salary', amount: 2000, type: 'income' },
   { date: '2024-02-08', description: 'Coffee', amount: -4.5, type: 'expense' },
@@ -25,14 +33,14 @@ const mockTransactions = [
 // Agrupar por mes
 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const monthlyData: Record<string, { Income: number; Expenses: number }> = {};
-mockTransactions.forEach(tx => {
+mockTransactions.forEach((tx: MockTransaction) => {
   const date = new Date(tx.date);
   const month = months[date.getMonth()];
   if (!monthlyData[month]) monthlyData[month] = { Income: 0, Expenses: 0 };
   if (tx.type === 'income') monthlyData[month].Income += tx.amount;
   if (tx.type === 'expense') monthlyData[month].Expenses += Math.abs(tx.amount);
 });
-const barChartData = months.map(month => ({
+const barChartData = months.map((month: string) => ({
   name: month,
   Income: monthlyData[month]?.Income || 0,
   Expenses: monthlyData[month]?.Expenses || 0,
@@ -166,7 +174,7 @@ const Dashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                          {mockTransactions.slice(0, 5).map((transaction, idx) => (
+                          {mockTransactions.slice(0, 5).map((transaction: MockTransaction, idx) => (
                             <tr key={idx} className="hover:bg-gray-50">
                               <td className="px-4 py-3 text-sm text-gray-900">
                                 {new Date(transaction.date).toLocaleDateString('es-MX')}
