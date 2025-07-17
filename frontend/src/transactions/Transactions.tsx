@@ -1143,125 +1143,119 @@ const Transactions: React.FC<TransactionsProps> = ({ userId }) => {
     borderRadius: 5,
     backgroundColor: '#f9f9f9'
   }}>
-          <h3>PDF Procesado Exitosamente ✅</h3>
-          
-          {/* Información del método usado */}
-          <div style={{ 
-            backgroundColor: pdfResult.method === 'OCR' ? '#e8f5e8' : '#e8f4fd', 
-            padding: 10, 
-            borderRadius: 5, 
-            marginBottom: 15,
-            border: `2px solid ${pdfResult.method === 'OCR' ? '#4caf50' : '#2196f3'}`
-          }}>
-            <strong>Método usado:</strong> {pdfResult.method === 'OCR' ? '🖼️ OCR (Reconocimiento de imagen)' : '📄 Extracción de texto PDF'}
-            {pdfResult.method === 'OCR' && (
-              <div style={{ fontSize: 12, marginTop: 5, color: '#2e7d32' }}>
-                El PDF contenía texto no legible, por lo que se usó OCR para extraer el contenido.
-              </div>
-            )}
-          </div>
-          
-          <p><strong>Páginas procesadas:</strong> {pdfResult.total_pages}</p>
-          
-          <details style={{ marginBottom: 15 }}>
-            <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>
-              Ver texto extraído (primeros 500 caracteres)
-            </summary>
+    <h3>PDF Procesado Exitosamente ✅</h3>
+    {/* Información del método usado */}
     <div style={{ 
-      backgroundColor: 'white', 
+      backgroundColor: pdfResult.method === 'OCR' ? '#e8f5e8' : '#e8f4fd', 
       padding: 10, 
-      border: '1px solid #ccc',
-      maxHeight: 200,
-      overflow: 'auto',
-      fontFamily: 'monospace',
-              fontSize: 12,
-              marginTop: 10
+      borderRadius: 5, 
+      marginBottom: 15,
+      border: `2px solid ${pdfResult.method === 'OCR' ? '#4caf50' : '#2196f3'}`
     }}>
-      {pdfResult.text}
+      <strong>Método usado:</strong> {pdfResult.method === 'OCR' ? '🖼️ OCR (Reconocimiento de imagen)' : '📄 Extracción de texto PDF'}
+      {pdfResult.method === 'OCR' && (
+        <div style={{ fontSize: 12, marginTop: 5, color: '#2e7d32' }}>
+          El PDF contenía texto no legible, por lo que se usó OCR para extraer el contenido.
+        </div>
+      )}
     </div>
-          </details>
-          
-          <h4 style={{ marginTop: 20 }}>Transacciones detectadas por AI:</h4>
-    {pdfResult.transactions && pdfResult.transactions.length > 0 ? (
-            <div>
-              <p style={{ color: '#666', fontSize: 14 }}>
-                Se encontraron {pdfResult.transactions.length} transacciones en el PDF.
-              </p>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10 }}>
-        <thead>
-          <tr style={{ backgroundColor: '#f5f5f5' }}>
-            <th style={{ padding: 8, border: '1px solid #ddd' }}>Fecha operación</th>
-            <th style={{ padding: 8, border: '1px solid #ddd' }}>Fecha cargo</th>
-            <th style={{ padding: 8, border: '1px solid #ddd' }}>Descripción</th>
-            <th style={{ padding: 8, border: '1px solid #ddd' }}>Monto</th>
-          </tr>
-        </thead>
-        <tbody>
-          {pdfResult.transactions.map((txn: ExtractedTransaction, idx: number) => (
-            <tr key={idx}>
-              <td style={{ padding: 8, border: '1px solid #ddd' }}>{txn.fecha_operacion}</td>
-              <td style={{ padding: 8, border: '1px solid #ddd' }}>{txn.fecha_cargo}</td>
-              <td style={{ padding: 8, border: '1px solid #ddd' }}>{txn.descripcion}</td>
-              <td style={{ padding: 8, border: '1px solid #ddd', color: (() => { const montoNum = typeof txn.monto === 'number' ? txn.monto : parseFloat(txn.monto.toString()); return montoNum < 0 ? 'red' : 'green'; })() }}>
-                        {formatCurrency(Math.abs(typeof txn.monto === 'number' ? txn.monto : parseFloat(txn.monto.toString())))}
-              </td>
+    <p><strong>Páginas procesadas:</strong> {pdfResult.total_pages}</p>
+    <details style={{ marginBottom: 15 }}>
+      <summary style={{ cursor: 'pointer', fontWeight: 'bold' }}>
+        Ver texto extraído (primeros 500 caracteres)
+      </summary>
+      <div style={{ 
+        backgroundColor: 'white', 
+        padding: 10, 
+        border: '1px solid #ccc',
+        maxHeight: 200,
+        overflow: 'auto',
+        fontFamily: 'monospace',
+        fontSize: 12,
+        marginTop: 10
+      }}>
+        {pdfResult.text}
+      </div>
+    </details>
+    <h4 style={{ marginTop: 20 }}>Transacciones detectadas por AI:</h4>
+    {Array.isArray(pdfResult.transactions) && pdfResult.transactions.length > 0 ? (
+      <div>
+        <p style={{ color: '#666', fontSize: 14 }}>
+          Se encontraron {pdfResult.transactions.length} transacciones en el PDF.
+        </p>
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10 }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f5f5f5' }}>
+              <th style={{ padding: 8, border: '1px solid #ddd' }}>Fecha operación</th>
+              <th style={{ padding: 8, border: '1px solid #ddd' }}>Fecha cargo</th>
+              <th style={{ padding: 8, border: '1px solid #ddd' }}>Descripción</th>
+              <th style={{ padding: 8, border: '1px solid #ddd' }}>Monto</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-            </div>
+          </thead>
+          <tbody>
+            {pdfResult.transactions.map((txn: ExtractedTransaction, idx: number) => (
+              <tr key={idx}>
+                <td style={{ padding: 8, border: '1px solid #ddd' }}>{txn.fecha_operacion}</td>
+                <td style={{ padding: 8, border: '1px solid #ddd' }}>{txn.fecha_cargo}</td>
+                <td style={{ padding: 8, border: '1px solid #ddd' }}>{txn.descripcion}</td>
+                <td style={{ padding: 8, border: '1px solid #ddd', color: (() => { const montoNum = typeof txn.monto === 'number' ? txn.monto : parseFloat(txn.monto.toString()); return montoNum < 0 ? 'red' : 'green'; })() }}>
+                  {formatCurrency(Math.abs(typeof txn.monto === 'number' ? txn.monto : parseFloat(txn.monto.toString())))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     ) : (
-            <div style={{ 
-              backgroundColor: '#fff3cd', 
-              border: '1px solid #ffeaa7', 
-              padding: 15, 
-              borderRadius: 5,
-              color: '#856404'
-            }}>
-              <strong>⚠️ No se detectaron transacciones</strong>
-              <p style={{ margin: '5px 0 0 0', fontSize: 14 }}>
-                Esto puede deberse a:
-              </p>
-              <ul style={{ margin: '5px 0 0 20px', fontSize: 14 }}>
-                <li>El PDF no contiene un estado de cuenta bancario</li>
-                <li>El formato del PDF es muy diferente al esperado</li>
-                <li>La calidad del texto extraído no es suficiente</li>
-              </ul>
-            </div>
+      <div style={{ 
+        backgroundColor: '#fff3cd', 
+        border: '1px solid #ffeaa7', 
+        padding: 15, 
+        borderRadius: 5,
+        color: '#856404'
+      }}>
+        <strong>⚠️ No se detectaron transacciones</strong>
+        <p style={{ margin: '5px 0 0 0', fontSize: 14 }}>
+          Esto puede deberse a:
+        </p>
+        <ul style={{ margin: '5px 0 0 20px', fontSize: 14 }}>
+          <li>El PDF no contiene un estado de cuenta bancario</li>
+          <li>El formato del PDF es muy diferente al esperado</li>
+          <li>La calidad del texto extraído no es suficiente</li>
+        </ul>
+      </div>
     )}
-          
-          <div style={{ marginTop: 20 }}>
-            <button 
-              onClick={() => setShowPdfUpload(false)}
-              style={{ 
-                backgroundColor: '#6c757d', 
-                color: 'white', 
-                border: 'none', 
-                padding: '10px 20px', 
-                borderRadius: 5,
-                cursor: 'pointer',
-                marginRight: 10
-              }}
-            >
+    <div style={{ marginTop: 20 }}>
+      <button 
+        onClick={() => setShowPdfUpload(false)}
+        style={{ 
+          backgroundColor: '#6c757d', 
+          color: 'white', 
+          border: 'none', 
+          padding: '10px 20px', 
+          borderRadius: 5,
+          cursor: 'pointer',
+          marginRight: 10
+        }}
+      >
         Cerrar
       </button>
-            
-            {Array.isArray(pdfResult.transactions) && pdfResult.transactions.length > 0 && (
-              <button 
-                onClick={() => handleSaveTransactions(pdfResult.transactions!)}
-                disabled={savingTransactions}
-                style={{ 
-                  backgroundColor: savingTransactions ? '#6c757d' : '#28a745', 
-                  color: 'white', 
-                  border: 'none', 
-                  padding: '10px 20px', 
-                  borderRadius: 5,
-                  cursor: savingTransactions ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {savingTransactions ? '⏳ Guardando...' : `💾 Guardar ${pdfResult.transactions.length} Transacciones`}
-              </button>
-            )}
+      {Array.isArray(pdfResult.transactions) && pdfResult.transactions.length > 0 && (
+        <button 
+          onClick={() => handleSaveTransactions(pdfResult.transactions!)}
+          disabled={savingTransactions}
+          style={{ 
+            backgroundColor: savingTransactions ? '#6c757d' : '#28a745', 
+            color: 'white', 
+            border: 'none', 
+            padding: '10px 20px', 
+            borderRadius: 5,
+            cursor: savingTransactions ? 'not-allowed' : 'pointer'
+          }}
+        >
+          {savingTransactions ? '⏳ Guardando...' : `💾 Guardar ${pdfResult.transactions.length} Transacciones`}
+        </button>
+      )}
     </div>
   </div>
 )}
