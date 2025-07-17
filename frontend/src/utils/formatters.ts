@@ -25,12 +25,12 @@ export const formatAmount = (amount: number): string => {
  * @returns String formateado como $1,000.00
  */
 export const formatPesos = (amount: number): string => {
-  const formatted = new Intl.NumberFormat('es-MX', {
+  return amount.toLocaleString('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(amount);
-  
-  return `$${formatted}`;
+  });
 };
 
 export const formatDate = (date: string | Date): string => {

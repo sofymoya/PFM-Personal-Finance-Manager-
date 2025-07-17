@@ -1,5 +1,3 @@
-import React from "react";
-import { formatPesos } from '../../utils/formatters';
 
 export const DivWrapper = () => {
   const mockTransactions = [
@@ -58,13 +56,6 @@ export const DivWrapper = () => {
     });
   };
 
-  const formatAmount = (amount: number) => {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: 'EUR'
-    }).format(Math.abs(amount));
-  };
-
   return (
     <div className="flex flex-col items-start relative self-stretch w-full flex-[0_0_auto] bg-white px-6 py-4">
       <div className="relative self-stretch w-full flex-[0_0_auto]">
@@ -98,7 +89,7 @@ export const DivWrapper = () => {
                   <td className={`py-3 px-4 text-sm font-medium text-right ${
                     transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
                   }`}>
-                    {transaction.type === 'income' ? '+' : '-'} {formatPesos(Math.abs(transaction.amount))}
+                    {transaction.type === 'income' ? '+' : '-'} {Math.abs(transaction.amount).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })}
                   </td>
                   <td className="py-3 px-4 text-sm text-center">
                     <div className="flex items-center justify-center gap-2">

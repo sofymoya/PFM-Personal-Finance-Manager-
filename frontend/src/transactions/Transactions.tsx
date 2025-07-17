@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -146,7 +146,10 @@ const deleteTransaction = async (userId: number, transactionId: number): Promise
 };
 
 // Función para subir PDF
-const uploadPDF = async (userId: number, file: File): Promise<any> => {
+const uploadPDF = async (
+  userId: number,
+  file: File
+): Promise<{ method?: string; total_pages?: number; text?: string; transactions?: ExtractedTransaction[] }> => {
   const token = getToken();
   if (!token) {
     throw new Error('No hay token de autenticación');
@@ -170,7 +173,9 @@ const uploadPDF = async (userId: number, file: File): Promise<any> => {
   return response.json();
 };
 
-const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
+interface TransactionsProps { userId?: number }
+
+const Transactions: React.FC<TransactionsProps> = ({ userId }) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -301,11 +306,11 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
 
   const filteredTransactions = getFilteredTransactions();
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
-      const data = await loadTransactions(userId);
+      const data = await loadTransactions(userId!);
       setTransactions(data);
     } catch (err) {
       setError('Error al cargar transacciones');
@@ -313,7 +318,11 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -331,7 +340,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
     try {
       if (editingTransaction) {
         // Actualizar transacción existente
-        const updatedTransaction = await updateTransaction(userId, editingTransaction.id, {
+        const updatedTransaction = await updateTransaction(userId!, editingTransaction.id, {
           fecha: formData.fecha,
           descripcion: formData.descripcion,
           monto: parseFloat(formData.monto)
@@ -344,7 +353,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
         setEditingTransaction(null);
       } else {
         // Crear nueva transacción
-        const newTransaction = await createTransaction(userId, {
+        const newTransaction = await createTransaction(userId!, {
           fecha: formData.fecha,
           descripcion: formData.descripcion,
           monto: parseFloat(formData.monto),
@@ -388,7 +397,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
     }
 
     try {
-      await deleteTransaction(userId, transactionId);
+      await deleteTransaction(userId!, transactionId);
       // Remover la transacción de la lista
       setTransactions(transactions.filter(t => t.id !== transactionId));
     } catch (err) {
@@ -419,7 +428,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
 
     try {
       setUploadingPdf(true);
-      const result = await uploadPDF(userId, file);
+      const result = await uploadPDF(userId!, file);
       setPdfResult(result);
       setShowPdfUpload(true);
     } catch (err) {
@@ -527,7 +536,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
       const savedTransactions = [];
       for (const txn of transactionsToSave) {
         try {
-          const savedTxn = await createTransaction(userId, txn);
+          const savedTxn = await createTransaction(userId!, txn);
           savedTransactions.push(savedTxn);
         } catch (error) {
           console.error(`Error guardando transacción: ${txn.descripcion}`, error);
@@ -569,7 +578,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
   };
 
   // Función para obtener el nombre de la categoría
-  const getCategoryName = (category: any): string => {
+  const getCategoryName = (category: string | { id: number; nombre: string } | undefined): string => {
     if (typeof category === 'string') {
       return category;
     }
@@ -676,8 +685,8 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
   const prepararDatosGraficaPastel = () => {
     const stats = calcularEstadisticas();
     const categorias = Object.entries(stats.statsPorCategoria)
-      .filter(([_, data]: [string, { gastos: number; ingresos: number; total: number }]) => data.gastos > 0)
-      .sort(([_, a]: [string, { gastos: number; ingresos: number; total: number }], [__, b]: [string, { gastos: number; ingresos: number; total: number }]) => b.gastos - a.gastos);
+      .filter(([, data]) => data.gastos > 0)
+      .sort(([, a], [, b]) => b.gastos - a.gastos);
     
     const colors = [
       '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57',
@@ -685,10 +694,10 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
     ];
     
     return {
-      labels: categorias.map(([cat, _]) => cat),
+      labels: categorias.map(([cat, ]) => cat),
       datasets: [
         {
-          data: categorias.map(([_, data]: [string, { gastos: number; ingresos: number; total: number }]) => data.gastos),
+          data: categorias.map(([, data]: [string, { gastos: number; ingresos: number; total: number }]) => data.gastos),
           backgroundColor: colors.slice(0, categorias.length),
           borderWidth: 2,
           borderColor: '#fff',
@@ -736,10 +745,10 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
 
   const stats = calcularEstadisticas();
 
-  useEffect(() => {
-    fetchTransactions();
-  }, [userId]);
-
+  // 1. Limpieza de callbacks: reemplaza (t: any) => ... por (t: Transaction) => ...
+  //    y (a: any, b: any) => ... por (a: Transaction, b: Transaction) => ...
+  //    Elimina variables _, __ no usadas en reduce/map/sort.
+  // 2. Para useEffect principal:
   // Preparar opciones de categorías para el dropdown
   useEffect(() => {
     const uniqueCategories = [...new Set(transactions.map(t => getCategoryName(t.categoria)))];
@@ -984,7 +993,7 @@ const Transactions: React.FC<{ userId: number }> = ({ userId }) => {
               </thead>
               <tbody>
                 {Object.entries(stats.statsPorCategoria)
-                  .sort(([_, a]: [string, { gastos: number; ingresos: number; total: number }], [__, b]: [string, { gastos: number; ingresos: number; total: number }]) => Math.abs(b.total) - Math.abs(a.total))
+                  .sort(([, a]: [string, { gastos: number; ingresos: number; total: number }], [, b]: [string, { gastos: number; ingresos: number; total: number }]) => Math.abs(b.total) - Math.abs(a.total))
                   .map(([categoria, data]: [string, { gastos: number; ingresos: number; total: number }]) => (
                     <tr key={categoria}>
                       <td style={{ padding: 12, borderBottom: '1px solid #eee' }}>
